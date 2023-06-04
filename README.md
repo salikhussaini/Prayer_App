@@ -13,9 +13,9 @@ Notifications: Optional notifications can be set to remind users of the upcoming
 User-friendly Interface: The GUI interface makes it easy for users to interact with the app and view the prayer times.
 ## Installation
   1. Clone the repository:
-    1a. git clone https://github.com/your-username/prayer-time-table-app.git
-  2. Install the required dependencies. Make sure you have Python installed. Run the following command in your terminal:
-    2a. pip install -r requirements.txt
+  2. git clone https://github.com/your-username/prayer-time-table-app.git
+  3. Install the required dependencies. Make sure you have Python installed. Run the following command in your terminal:
+  4. pip inst.ll -r requirements.txt
 ## Usage
   1. Launch the app by running the following command:
   2. python app.py
