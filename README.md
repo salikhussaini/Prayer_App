@@ -3,14 +3,14 @@
 The Prayer Time Table App is a GUI-based application that provides users with accurate and up-to-date prayer times. It automatically updates the prayer times based on the user's location and the current date. The app offers a user-friendly interface, allowing users to view the prayer times for the day, week, or month.
 
 ## Features
-Automatic Time Updates: The app fetches the current date and the user's location to update the prayer times automatically.
-Prayer Times Display: The app displays the five daily prayer times (Fajr, Dhuhr, Asr, Maghrib, and Isha) for the selected date.
-Date Selection: Users can choose a specific date to view the prayer times.
-Weekly and Monthly Views: The app provides options to view the prayer times for the entire week or month.
-Location-based Prayer Times: The app calculates the prayer times based on the user's current location.
-Customization: Users can customize the app settings, such as the calculation method, juristic method, and daylight saving time adjustment.
-Notifications: Optional notifications can be set to remind users of the upcoming prayer times.
-User-friendly Interface: The GUI interface makes it easy for users to interact with the app and view the prayer times.
+  - Automatic Time Updates: The app fetches the current date and the user's location to update the prayer times automatically.
+  - Prayer Times Display: The app displays the five daily prayer times (Fajr, Dhuhr, Asr, Maghrib, and Isha) for the selected date.
+  - Date Selection: Users can choose a specific date to view the prayer times.
+  - Weekly and Monthly Views: The app provides options to view the prayer times for the entire week or month.
+  - Location-based Prayer Times: The app calculates the prayer times based on the user's current location.
+  - Customization: Users can customize the app settings, such as the calculation method, juristic method, and daylight saving time adjustment.
+  - Notifications: Optional notifications can be set to remind users of the upcoming prayer times.
+  - User-friendly Interface: The GUI interface makes it easy for users to interact with the app and view the prayer times.
 ## Installation
   1. Clone the repository:
   2. git clone https://github.com/salikhussaini/Prayer_App.git
