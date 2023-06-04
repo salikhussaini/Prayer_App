@@ -2,8 +2,6 @@ import datetime
 import tkinter as tk
 import requests
 import json
-
-from PIL import ImageTk, Image
 import os
 # Get the file path of the current Python file
 file_path = os.path.abspath(__file__)
@@ -112,31 +110,14 @@ widget_height = screen_height
 # Set the geometry of the window
 root.geometry(f"{widget_width}x{widget_height}")
 
-# Load the image
-pic_name = "pic_2a.png"
-pic_path = f'{directory_path}\{pic_name}'
-image = Image.open(pic_path)
-resized_image = image.resize((screen_width , screen_height), Image.ANTIALIAS)
-
-
-background_image = ImageTk.PhotoImage(resized_image)
-# Resize the image to fit the screen
-#resized_image = image.subsample(screen_width // image.width(), screen_height // image.height())
-
-#image = tk.PhotoImage(file="pic_2a.png")
-
 # Create a label with the image as the background
 background_label = tk.Label(root, image=background_image)
 background_label.place(x=0, y=0, relwidth=1, relheight=1)
 
-
 # Set the background color to white
 root.configure(background="black")
 
-
-
 # Create the text widget with the messages
-
 ##Create Mosque Name Widget
 mosque_label = tk.Label(root, text = 'Masjid Umar AL - Farooq', fg="dark green", font=("Arial", 80), highlightbackground='gold', bg='black', highlightthickness=1)
 mosque_label.grid(row=0, column=0,rowspan=1, columnspan=6, sticky="nsew", pady=.1)
