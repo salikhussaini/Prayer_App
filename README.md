@@ -33,5 +33,5 @@ When contributing, please ensure you follow the existing coding style and commit
 This project is licensed under the MIT License. Feel free to modify and distribute it as needed.
 
 ## Acknowledgments
-This app utilizes prayer time calculation libraries, such as PrayTimes, for accurate prayer time calculations.
+This app utilizes prayer time Islamic Finder API for accurate prayer time calculations.
 The GUI is built using Tkinter, the standard Python interface to the Tk GUI toolkit.
