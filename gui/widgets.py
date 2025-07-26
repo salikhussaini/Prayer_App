@@ -3,8 +3,30 @@ from core.calculations import calculate_prayer_times  # Import calculation funct
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
-    "UK": ["London"],
-    "USA": ["New York"],
+    "UK": sorted(["London"]),
+    "USA": sorted([
+        "New York", "Los Angeles", "Chicago"
+        , "Houston", "Phoenix", "Philadelphia"
+        , "San Antonio", "San Diego", "Dallas", "San Jose"
+        , "Austin", "Jacksonville", "Fort Worth", "Columbus"
+        , "Charlotte", "San Francisco", "Indianapolis", "Seattle"
+        , "Denver", "Washington D.C.", "Boston", "El Paso"
+        , "Nashville", "Detroit", "Oklahoma City", "Portland"
+        , "Las Vegas", "Baltimore", "Milwaukee", "Albuquerque"
+        , "Tucson", "Fresno", "Sacramento", "Long Beach"
+        , "Kansas City", "Mesa", "Virginia Beach", "Atlanta"
+        , "Colorado Springs", "Omaha", "Raleigh", "Miami"
+        , "Cleveland", "Tulsa", "Oakland", "Minneapolis"
+        , "Wichita", "New Orleans", "Arlington", "Bakersfield"
+        , "Tampa", "Honolulu", "Anaheim", "Aurora"
+        , "Santa Ana", "St. Louis", "Riverside", "Corpus Christi"
+        , "Lexington", "Pittsburgh", "Anchorage", "Stockton"
+        , "Cincinnati", "Saint Paul", "Greensboro", "Lincoln"
+        , "Plano", "Henderson", "Buffalo", "Fort Wayne"
+        , "Jersey City", "Chula Vista", "Orlando", "St. Petersburg"
+        , "Norfolk", "Chandler", "Laredo", "Madison"
+
+    ]),
     "Pakistan": ["Karachi"],
     "Egypt": ["Cairo"],
     "Indonesia": ["Jakarta"]
