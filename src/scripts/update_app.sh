@@ -16,7 +16,7 @@ if [ $LOCAL != $REMOTE ]; then
     # pip install -r requirements.txt
 
     # Restart the app (choose one)
-    systemctl restart yourapp.service   # If using systemd
+    pkill -f main.py && nohup python3 main.py &
     # pm2 restart your-app-name         # If using pm2
     # or kill and restart a Python script manually:
     # pkill -f your_script.py && nohup python3 your_script.py &
