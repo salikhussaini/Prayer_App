@@ -12,9 +12,9 @@ class MainWindow(tk.Tk):
         self.geometry("500x350")
         self.configure(bg="#f5f5f5")
 
-        self.country_var = tk.StringVar(value="UK")
-        self.city_var = tk.StringVar(value=COUNTRY_CITIES[self.country_var.get()][0])
-
+        self.country_var = tk.StringVar(value="USA") # Default country
+        self.city_var = tk.StringVar(value="Chicago") # Default city
+        
         # Menu bar using PrayerMenu
         self.menu = PrayerMenu(
             self,

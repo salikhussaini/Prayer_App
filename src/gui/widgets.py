@@ -1,6 +1,6 @@
 import tkinter as tk
-from src.core.calculations import calculate_prayer_times
 import datetime
+from src.core.calculations import calculate_prayer_times
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
@@ -27,22 +27,24 @@ COUNTRY_CITIES = {
 }
 
 class PrayerTimesFrame(tk.Frame):
-    """A frame to display all daily prayer times with location selection."""
+    """A frame to display all daily prayer times with location selection and next prayer countdown."""
     def __init__(self, master=None, date=None, location=None):
         super().__init__(master)
         self.date = date
-        self.location = location or {"city": "London", "country": "UK"}
+        self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
-
-        # Prayer time labels start from row 1
+        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#16a085", bg="#f5f5f5")
+        self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(0, 10))
         self._init_labels()
+        self.update_times()
+        self.update_next_prayer()
 
     def _init_labels(self):
         """Initialize prayer time labels with individual boxes."""
         prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
         for idx, prayer in enumerate(prayers):
             frame = tk.Frame(self, bd=2, relief="groove", bg="#eaf6fb")
-            frame.grid(row=0, column=idx, padx=8, pady=10, sticky="nsew")
+            frame.grid(row=2, column=idx, padx=8, pady=10, sticky="nsew")
             lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#eaf6fb", fg="#2980b9")
             lbl_prayer.pack(padx=8, pady=(8, 2))
             lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#eaf6fb", fg="#2c3e50")
@@ -52,17 +54,47 @@ class PrayerTimesFrame(tk.Frame):
     def on_location_change(self):
         """Update location and refresh prayer times."""
         self.update_times()
+        self.update_next_prayer()
 
     def update_times(self, times=None):
         """Update the displayed prayer times in AM/PM format."""
         if times is None:
             times = calculate_prayer_times(self.date, self.location)
+        self.current_times = times
         for prayer in ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]:
             time_str = times.get(prayer, "--:--")
-            # Convert to AM/PM format if time is valid
             try:
                 time_obj = datetime.datetime.strptime(time_str, "%H:%M")
                 formatted_time = time_obj.strftime("%I:%M %p")
             except Exception:
                 formatted_time = time_str
             self.labels[prayer].config(text=f"{formatted_time}")
+        self.update_next_prayer()
+
+    def update_next_prayer(self):
+        """Calculate and display time until next prayer."""
+        now = datetime.datetime.now()
+        next_prayer = None
+        min_delta = None
+        for prayer in ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]:
+            time_str = self.current_times.get(prayer, "--:--")
+            try:
+                prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
+                if prayer_time < now:
+                    continue
+                delta = prayer_time - now
+                if min_delta is None or delta < min_delta:
+                    min_delta = delta
+                    next_prayer = prayer
+            except Exception:
+                continue
+        if next_prayer and min_delta:
+            hours, remainder = divmod(min_delta.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            self.next_prayer_label.config(
+                text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
+            )
+        else:
+            self.next_prayer_label.config(text="No more prayers today.")
+
+        # Schedule update
