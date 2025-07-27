@@ -29,11 +29,11 @@ COUNTRY_CITIES = {
 class PrayerTimesFrame(tk.Frame):
     """A frame to display all daily prayer times with location selection and next prayer countdown."""
     def __init__(self, master=None, date=None, location=None):
-        super().__init__(master)
+        super().__init__(master,bg="#000000")
         self.date = date
         self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
-        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#16a085", bg="#f5f5f5")
+        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#006853", bg="#000000")
         self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(0, 10))
         self._init_labels()
         self.update_times()
@@ -43,11 +43,11 @@ class PrayerTimesFrame(tk.Frame):
         """Initialize prayer time labels with individual boxes."""
         prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
         for idx, prayer in enumerate(prayers):
-            frame = tk.Frame(self, bd=2, relief="groove", bg="#eaf6fb")
+            frame = tk.Frame(self, bd=2, relief="groove", bg="#000000")
             frame.grid(row=2, column=idx, padx=8, pady=10, sticky="nsew")
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#eaf6fb", fg="#2980b9")
+            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#000000", fg="#FFFFFF")
             lbl_prayer.pack(padx=8, pady=(8, 2))
-            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#eaf6fb", fg="#2c3e50")
+            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#000000", fg="#006853")
             lbl_time.pack(padx=8, pady=(2, 8))
             self.labels[prayer] = lbl_time
 

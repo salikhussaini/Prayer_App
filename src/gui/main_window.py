@@ -9,12 +9,15 @@ class MainWindow(tk.Tk):
         init_db()  # Ensure DB and table are created before anything else
         super().__init__()
         self.title("Prayer Times")
+
         self.geometry("500x350")
-        self.configure(bg="#f5f5f5")
+        # Set background color to black
+        self.configure(bg="#000000") 
+
 
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
-        
+
         # Menu bar using PrayerMenu
         self.menu = PrayerMenu(
             self,
@@ -28,15 +31,22 @@ class MainWindow(tk.Tk):
         )
 
         # Current clock label
-        self.clock_label = tk.Label(self, text="", font=("Arial", 14), bg="#f5f5f5", fg="#34495e")
+        # Green text color
+        self.clock_label = tk.Label(self, text="", font=("Arial", 14), bg="#000000", fg="#015f20") 
         self.clock_label.pack(pady=(0, 10))
+
+        # Start the clock update loop
         self.update_clock()
 
+        # Prayer times frame    
         self.prayer_frame = PrayerTimesFrame(
             self, date=datetime.date.today(),
             location={"city": self.city_var.get(), "country": self.country_var.get()}
         )
         self.prayer_frame.pack(pady=10)
+        # Schedule daily prayer time update at midnight
+        self.schedule_midnight_update()
+
 
     def on_country_change_menu(self):
         cities = COUNTRY_CITIES[self.country_var.get()]
@@ -59,3 +69,16 @@ class MainWindow(tk.Tk):
         now = datetime.datetime.now().strftime("%I:%M:%S %p")  # 12-hour format with AM/PM
         self.clock_label.config(text=f"{now}")
         self.after(1000, self.update_clock)
+    def schedule_midnight_update(self):
+        """Schedule prayer times update at midnight every day."""
+        now = datetime.datetime.now()
+        tomorrow = now + datetime.timedelta(days=1)
+        midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
+        ms_until_midnight = int((midnight - now).total_seconds() * 1000)
+        self.after(ms_until_midnight, self.midnight_update)
+
+    def midnight_update(self):
+        """Update prayer times for the new day and reschedule for next midnight."""
+        self.prayer_frame.date = datetime.date.today()
+        self.prayer_frame.update_times()
+        self.schedule_midnight_update()
