@@ -5,9 +5,12 @@ Prayer times are fetched from the Aladhan API and cached in a local SQLite datab
 
 ## Features
 
-- Select your country and city from dropdown menus
-- View Fajr, Dhuhr, Asr, Maghrib, and Isha times
-- Refresh button to update prayer times
+- Select your country and city from the menu bar (File > Set Location)
+- View Fajr, Dhuhr, Asr, Maghrib, and Isha times in individual boxes
+- Prayer times displayed in AM/PM format
+- Current time (AM/PM) shown at the top of the window
+- Manual refresh from the menu bar (File > Set Location > Refresh Prayer Times)
+- About and Settings options in the menu bar
 - Caches results locally for faster access
 - Error handling for API and database issues
 
@@ -41,18 +44,19 @@ python main.py
 ```
 Prayer_Times/
 │
-├── core/
-│   ├── api.py
-│   ├── db.py
-│   ├── calculations.py
-│   └── utils.py
-│
-├── gui/
-│   ├── main_window.py
-│   ├── widgets.py
-│   ├── dialogs.py
+├── src/
+│   ├── core/
+│   │   ├── api.py
+│   │   ├── calculations.py
+│   │   ├── db.py
+│   │   └── utils.py
+│   ├── gui/
+│   │   ├── dialogs.py
+│   │   ├── main_window.py
+│   │   ├── menu.py
+│   │   ├── widgets.py
+│   │   └── __init__.py
 │   └── __init__.py
-│
 ├── main.py
 ├── requirements.txt
 └── README.md

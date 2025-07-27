@@ -2,9 +2,11 @@ import tkinter as tk
 import datetime
 from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
 from src.gui.menu import PrayerMenu
+from src.core.db import init_db
 
 class MainWindow(tk.Tk):
     def __init__(self):
+        init_db()  # Ensure DB and table are created before anything else
         super().__init__()
         self.title("Prayer Times")
         self.geometry("500x350")
