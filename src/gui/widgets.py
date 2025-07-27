@@ -1,5 +1,6 @@
 import tkinter as tk
 from src.core.calculations import calculate_prayer_times
+import datetime
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
@@ -33,28 +34,35 @@ class PrayerTimesFrame(tk.Frame):
         self.location = location or {"city": "London", "country": "UK"}
         self.labels = {}
 
-        # Update button
-        #self.update_btn = tk.Button(self, text="Update Location", command=self.on_location_change)
-        #self.update_btn.grid(row=0, column=4, padx=10, pady=5)
-
         # Prayer time labels start from row 1
         self._init_labels()
 
     def _init_labels(self):
-        """Initialize prayer time labels with placeholders."""
-        for idx, prayer in enumerate(["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]):
-            lbl = tk.Label(self, text=f"{prayer}: --:--")
-            lbl.grid(row=idx + 1, column=0, columnspan=5, sticky="w", padx=10, pady=2)
-            self.labels[prayer] = lbl
+        """Initialize prayer time labels with individual boxes."""
+        prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+        for idx, prayer in enumerate(prayers):
+            frame = tk.Frame(self, bd=2, relief="groove", bg="#eaf6fb")
+            frame.grid(row=0, column=idx, padx=8, pady=10, sticky="nsew")
+            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#eaf6fb", fg="#2980b9")
+            lbl_prayer.pack(padx=8, pady=(8, 2))
+            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#eaf6fb", fg="#2c3e50")
+            lbl_time.pack(padx=8, pady=(2, 8))
+            self.labels[prayer] = lbl_time
 
     def on_location_change(self):
         """Update location and refresh prayer times."""
         self.update_times()
 
     def update_times(self, times=None):
-        """Update the displayed prayer times."""
+        """Update the displayed prayer times in AM/PM format."""
         if times is None:
             times = calculate_prayer_times(self.date, self.location)
         for prayer in ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]:
-            time = times.get(prayer, "--:--")
-            self.labels[prayer].config(text=f"{prayer}: {time}")
+            time_str = times.get(prayer, "--:--")
+            # Convert to AM/PM format if time is valid
+            try:
+                time_obj = datetime.datetime.strptime(time_str, "%H:%M")
+                formatted_time = time_obj.strftime("%I:%M %p")
+            except Exception:
+                formatted_time = time_str
+            self.labels[prayer].config(text=f"{formatted_time}")
