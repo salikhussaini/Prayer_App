@@ -10,10 +10,14 @@ class MainWindow(tk.Tk):
         super().__init__()
         self.title("Prayer Times")
 
-        self.geometry("500x350")
+        # Get screen width and height
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+
+        # Set geometry to full screen size (e.g., "1920x1080")
+        self.geometry(f"{screen_width}x{screen_height}+0+0")
         # Set background color to black
         self.configure(bg="#000000") 
-
 
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
