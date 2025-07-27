@@ -17,7 +17,7 @@ class PrayerMenu:
         self.on_exit = on_exit
         self.on_settings = on_settings
 
-        self.menubar = tk.Menu(master)
+        self.menubar = tk.Menu(master,bg="#000000", fg="#FFFFFF")
         master.config(menu=self.menubar)
 
         # File menu
