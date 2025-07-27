@@ -32,7 +32,7 @@ class MainWindow(tk.Tk):
 
         # Current clock label
         # Green text color
-        self.clock_label = tk.Label(self, text="", font=("Arial", 14), bg="#000000", fg="#015f20") 
+        self.clock_label = tk.Label(self, text="", font=("Arial", 14), bg="#000000", fg="#006853") 
         self.clock_label.pack(pady=(0, 10))
 
         # Start the clock update loop
