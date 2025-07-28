@@ -33,11 +33,17 @@ class PrayerTimesFrame(tk.Frame):
         self.date = date
         self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
+        self.alerted_prayers = set()
+        
         self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#006853", bg="#000000")
         self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(0, 10))
+        
         self._init_labels()
         self.update_times()
         self.update_next_prayer()
+
+        # 🔁 Start prayer time alert checking loop
+        self.check_prayer_alerts()
 
     def _init_labels(self):
         """Initialize prayer time labels with individual boxes."""
@@ -96,5 +102,70 @@ class PrayerTimesFrame(tk.Frame):
             )
         else:
             self.next_prayer_label.config(text="No more prayers today.")
+    def check_prayer_alerts(self):
+        """
+        Check if it's time to alert the user for any upcoming prayer.
 
-        # Schedule update
+        This method compares current time against today's prayer times.
+        If a prayer is within 60 seconds and hasn't been alerted, an alert is triggered.
+        """
+        now = datetime.datetime.now()
+        future = now + datetime.timedelta(minutes=68)
+        min_delta = None
+
+        for prayer, time_str in self.current_times.items():
+            try:
+                # Convert string to today's datetime object
+                prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
+                
+                # Skip if this prayer has already passed
+                if prayer_time < now:
+                    continue
+                
+                # Determine if this is the soonest upcoming prayer
+                delta = prayer_time - now
+                
+                # Update the minimum delta if this is the first future prayer found,
+                # or if this prayer occurs sooner than the current next prayer candidate
+                if min_delta is None or delta < min_delta:
+                    #print(f"Checking prayer: {prayer} at {time_str}, delta: {delta}")
+                    # Keep track of soonest upcoming prayer
+                    min_delta = delta
+                
+                # Alert user if this prayer is within 1 minute
+                seconds_until = delta.total_seconds()
+                if 0 <= seconds_until < 60 and prayer not in self.alerted_prayers:
+                    self.alert_user(prayer)
+                    self.alerted_prayers.add(prayer)
+            except Exception:
+                continue
+            except ValueError as e:
+                print(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
+                continue
+
+        # Re-check after 1 minute
+        self.after(60000, self.check_prayer_alerts)
+    def alert_user(self, prayer):
+        # Create popup
+        alert = tk.Toplevel(self)
+        alert.title("Prayer Time")
+        alert.configure(bg="#000000")
+        alert.geometry("350x150+500+300")
+        alert.resizable(False, False)
+        # Make it modal
+        alert.grab_set()
+        alert.focus_force()
+    
+        # Content
+        frame = tk.Frame(alert, bg="#000000")
+        frame.pack(padx=20, pady=20)
+
+        # Special text for Fajr
+        if prayer == "Fajr":
+            message = "الصلاة خير من النوم\nPrayer is better than sleep."
+        else:
+            message = "May Allah accept your prayer."
+
+        tk.Label(frame, text=f"🕌 It's time for {prayer} prayer", font=("Arial", 14, "bold"), fg="#00FF00", bg="#000000").pack(pady=(0, 10))
+        tk.Label(frame, text=message, font=("Arial", 12), fg="#CCCCCC", bg="#000000").pack(pady=(0, 10))
+        tk.Button(frame, text="OK", command=alert.destroy).pack()
