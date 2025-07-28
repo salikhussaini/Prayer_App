@@ -1,8 +1,15 @@
 import tkinter as tk
 import datetime
+import platform
+import threading
+
+try:
+    import winsound  # For Windows sound alert
+except ImportError:
+    winsound = None
+
 from src.core.calculations import calculate_prayer_times
 
-# Define valid cities for each country
 COUNTRY_CITIES = {
     "UK": sorted(["London"]),
     "USA": sorted([
@@ -26,16 +33,22 @@ COUNTRY_CITIES = {
     "Indonesia": ["Jakarta"]
 }
 
+
 class PrayerTimesFrame(tk.Frame):
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
-    def __init__(self, master=None, date=None, location=None):
-        super().__init__(master,bg="#000000")
-        self.date = date
+
+    def __init__(self, master=None, date: datetime.date = None, location: dict = None):
+        super().__init__(master, bg="#000000")
+        self.date = date or datetime.date.today()
         self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
         self.alerted_prayers = set()
         self.current_times = {}
-        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#006853", bg="#000000")
+
+        # Label showing next prayer countdown
+        self.next_prayer_label = tk.Label(
+            self, text="", font=("Arial", 12, "bold"), fg="#006853", bg="#000000"
+        )
         self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(0, 10))
 
         self._init_labels()
@@ -51,7 +64,9 @@ class PrayerTimesFrame(tk.Frame):
         for idx, prayer in enumerate(prayers):
             frame = tk.Frame(self, bd=2, relief="groove", bg="#000000")
             frame.grid(row=2, column=idx, padx=8, pady=10, sticky="nsew")
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#000000", fg="#FFFFFF")
+            lbl_prayer = tk.Label(
+                frame, text=prayer, font=("Arial", 12, "bold"), bg="#000000", fg="#FFFFFF"
+            )
             lbl_prayer.pack(padx=8, pady=(8, 2))
             lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#000000", fg="#006853")
             lbl_time.pack(padx=8, pady=(2, 8))
@@ -107,6 +122,7 @@ class PrayerTimesFrame(tk.Frame):
             )
         else:
             self.next_prayer_label.config(text="No more prayers today.")
+
     def check_prayer_alerts(self):
         """
         Periodically check if it's time to alert the user for any upcoming prayer.
@@ -114,58 +130,59 @@ class PrayerTimesFrame(tk.Frame):
         Alerts once when prayer time is within 60 seconds and prevents duplicate alerts.
         """
         now = datetime.datetime.now()
-        future = now + datetime.timedelta(minutes=68)
         min_delta = None
         next_prayer_to_alert = None
 
         for prayer, time_str in self.current_times.items():
             try:
-                # Convert string to today's datetime object
                 prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
-                
-                # Skip if this prayer has already passed
                 if prayer_time < now:
                     continue
-                
-                # Determine if this is the soonest upcoming prayer
                 delta = prayer_time - now
                 seconds_until = delta.total_seconds()
-                
-                # Update the minimum delta if this is the first future prayer found,
-                # or if this prayer occurs sooner than the current next prayer candidate
                 if (min_delta is None or delta < min_delta) and seconds_until > 0:
-                    #print(f"Checking prayer: {prayer} at {time_str}, delta: {delta}")
-                    # Keep track of soonest upcoming prayer
                     min_delta = delta
                     next_prayer_to_alert = prayer
-                
-                # Alert user if this prayer is within 1 minute
-                seconds_until = delta.total_seconds()
+
+                # Alert if within 1 minute and not already alerted
                 if 0 <= seconds_until < 60 and prayer not in self.alerted_prayers:
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
-            except Exception:
-                continue
             except ValueError as e:
                 print(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
+            except Exception as e:
+                print(f"Unexpected error during prayer alert check: {e}")
+                continue
 
-        # Re-check after 1 minute
+        # Schedule next check after 1 minute (60000 ms)
         self.after(60000, self.check_prayer_alerts)
-    def alert_user(self, prayer):
-        # Create popup
+
+    def alert_user(self, prayer: str):
+        """Display prayer alert popup with Islamic message and play sound notification."""
+
+        def play_sound():
+            """Play notification sound depending on OS."""
+            try:
+                if platform.system() == "Windows" and winsound:
+                    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                else:
+                    # Linux and Mac alternative using 'beep' command or system bell
+                    print('\a')  # ASCII Bell character as fallback
+            except Exception as e:
+                print(f"Sound alert failed: {e}")
+
+        # Run sound in separate thread to avoid blocking UI
+        threading.Thread(target=play_sound, daemon=True).start()
+
         alert = tk.Toplevel(self)
         alert.title("Prayer Time")
         alert.configure(bg="#000000")
         alert.geometry("350x150+500+300")
         alert.resizable(False, False)
-        # Make it modal
         alert.grab_set()
         alert.focus_force()
-        # Auto close after 2 minute (60000 milliseconds)
-        alert.after(60000*2, alert.destroy)
-    
-        # Content
+
         frame = tk.Frame(alert, bg="#000000")
         frame.pack(padx=20, pady=20)
 
@@ -176,7 +193,13 @@ class PrayerTimesFrame(tk.Frame):
             message = "May Allah accept your prayer."
             dua = "اللهم تقبل صلاتنا وصلاتكم"
 
-        tk.Label(frame, text=f"🕌 It's time for {prayer} prayer", font=("Arial", 14, "bold"), fg="#00FF00", bg="#000000").pack(pady=(0, 10))
+        tk.Label(
+            frame,
+            text=f"🕌 It's time for {prayer} prayer",
+            font=("Arial", 14, "bold"),
+            fg="#00FF00",
+            bg="#000000"
+        ).pack(pady=(0, 10))
         tk.Label(frame, text=message, font=("Arial", 12), fg="#CCCCCC", bg="#000000").pack(pady=(0, 5))
         tk.Label(frame, text=dua, font=("Arial", 10, "italic"), fg="#AAAAAA", bg="#000000").pack(pady=(0, 10))
         tk.Button(frame, text="OK", command=alert.destroy).pack()
