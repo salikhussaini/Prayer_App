@@ -27,6 +27,7 @@ COUNTRY_CITIES = {
 }
 
 class PrayerTimesFrame(tk.Frame):
+    PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
     def __init__(self, master=None, date=None, location=None):
         super().__init__(master,bg="#000000")
@@ -54,7 +55,7 @@ class PrayerTimesFrame(tk.Frame):
 
     def _init_labels(self):
         """Initialize prayer time labels with individual boxes."""
-        prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+        prayers = self.PRAYERS
         for idx, prayer in enumerate(prayers):
             frame = tk.Frame(self, bd=5, relief="ridge", bg="#000000", padx=25, pady=25)
             frame.grid(row=2, column=idx, padx=20, pady=20, sticky="nsew")
@@ -82,7 +83,7 @@ class PrayerTimesFrame(tk.Frame):
                 print(f"Error calculating prayer times: {e}")
                 times = {}
         self.current_times = times
-        for prayer in ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]:
+        for prayer in self.PRAYERS:
             time_str = times.get(prayer, "--:--")
             try:
                 time_obj = datetime.datetime.strptime(time_str, "%H:%M")
@@ -97,7 +98,7 @@ class PrayerTimesFrame(tk.Frame):
         now = datetime.datetime.now()
         next_prayer = None
         min_delta = None
-        for prayer in ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]:
+        for prayer in self.PRAYERS:
             time_str = self.current_times.get(prayer, "--:--")
             try:
                 prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())

@@ -40,7 +40,8 @@ class MainWindow(tk.Tk):
             self.quit
         )
 
-        # Analog clock canvas
+        # Accept canvas size as a parameter or use screen scaling
+        self.analog_canvas_size = int(screen_height * 0.25)
         self.analog_canvas_size = 250
         self.analog_clock = tk.Canvas(self, width=self.analog_canvas_size, height=self.analog_canvas_size, bg=self.BG_COLOR, highlightthickness=0)
         self.analog_clock.pack(pady=(20, 10))
@@ -133,7 +134,7 @@ class MainWindow(tk.Tk):
 
     def update_clock(self):
         """Update the clock label every second with AM/PM format."""
-        now = datetime.datetime.now().strftime("%I:%M:%S %p")  # 12-hour format with AM/PM
+        now = datetime.datetime.now().strftime("%I:%M %p")  # 12-hour format with AM/PM
         self.clock_label.config(text=f"{now}")
         self.after(1000, self.update_clock)
     def schedule_midnight_update(self):
