@@ -17,7 +17,10 @@ def fetch_prayer_times_from_api(date, city, country=""):
         "city": city,
         "country": country,
         "method": 2,
-        "date": date.strftime("%d-%m-%Y")
+        "date": date.strftime("%d-%m-%Y"),
+        "method": 2,  # 2 - Islamic Society of North America
+        "school": 1  # 1 - Hanafi
+
     }
     try:
         response = requests.get(API_URL, params=params)
