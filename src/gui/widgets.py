@@ -35,8 +35,11 @@ class PrayerTimesFrame(tk.Frame):
         self.labels = {}
         self.alerted_prayers = set()
         self.current_times = {}
-        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 12, "bold"), fg="#006853", bg="#000000")
-        self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(0, 10))
+        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 24, "bold"), fg="#006853", bg="#000000")
+
+        self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(10, 20))
+        for col in range(5):
+            self.grid_columnconfigure(col, weight=1)
 
         self._init_labels()
         self.update_times()
@@ -45,18 +48,25 @@ class PrayerTimesFrame(tk.Frame):
         # Start prayer alert checking loop in background
         self.check_prayer_alerts()
 
+
+        self.pack_propagate(False)
+        self.configure(padx=40, pady=40)
+
     def _init_labels(self):
         """Initialize prayer time labels with individual boxes."""
         prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
         for idx, prayer in enumerate(prayers):
-            frame = tk.Frame(self, bd=2, relief="groove", bg="#000000")
-            frame.grid(row=2, column=idx, padx=8, pady=10, sticky="nsew")
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 12, "bold"), bg="#000000", fg="#FFFFFF")
-            lbl_prayer.pack(padx=8, pady=(8, 2))
-            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 14), bg="#000000", fg="#006853")
-            lbl_time.pack(padx=8, pady=(2, 8))
-            self.labels[prayer] = lbl_time
+            frame = tk.Frame(self, bd=5, relief="ridge", bg="#000000", padx=25, pady=25)
+            frame.grid(row=2, column=idx, padx=20, pady=20, sticky="nsew")
 
+            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 20, "bold"), bg="#000000", fg="#006853")
+            lbl_prayer.pack(padx=10, pady=(10, 5))
+
+            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 28, "bold"), bg="#000000", fg="#006853")
+            lbl_time.pack(padx=10, pady=(5, 10))
+
+            self.labels[prayer] = lbl_time
+        
     def on_location_change(self):
         """Update location and refresh prayer times."""
         self.update_times()
@@ -107,6 +117,9 @@ class PrayerTimesFrame(tk.Frame):
             )
         else:
             self.next_prayer_label.config(text="No more prayers today.")
+
+        # Refresh every 60 seconds
+        self.after(60000, self.update_next_prayer)
     def check_prayer_alerts(self):
         """
         Periodically check if it's time to alert the user for any upcoming prayer.
@@ -176,7 +189,8 @@ class PrayerTimesFrame(tk.Frame):
             message = "May Allah accept your prayer."
             dua = "اللهم تقبل صلاتنا وصلاتكم"
 
-        tk.Label(frame, text=f"🕌 It's time for {prayer} prayer", font=("Arial", 14, "bold"), fg="#00FF00", bg="#000000").pack(pady=(0, 10))
-        tk.Label(frame, text=message, font=("Arial", 12), fg="#CCCCCC", bg="#000000").pack(pady=(0, 5))
-        tk.Label(frame, text=dua, font=("Arial", 10, "italic"), fg="#AAAAAA", bg="#000000").pack(pady=(0, 10))
-        tk.Button(frame, text="OK", command=alert.destroy).pack()
+        # Display prayer time alert
+        tk.Label(frame, text=f"🕌 It's time for {prayer} prayer", font=("Arial", 18, "bold"), fg="#006853", bg="#000000").pack(pady=(0, 15))
+        tk.Label(frame, text=message, font=("Arial", 16), fg="#006853", bg="#000000").pack(pady=(0, 10))
+        tk.Label(frame, text=dua, font=("Arial", 14, "italic"), fg="#006853", bg="#000000").pack(pady=(0, 15))
+        tk.Button(frame, text="OK", font=("Arial", 14, "bold"), command=alert.destroy, bg="#000000", fg="#006853").pack(pady=(10, 0))

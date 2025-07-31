@@ -1,13 +1,20 @@
 import tkinter as tk
+import math
 import datetime
 from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
 from src.gui.menu import PrayerMenu
 from src.core.db import init_db
 
 class MainWindow(tk.Tk):
+    BG_COLOR = "#000000"
+    PRIMARY_COLOR = "#006853"
+    HOUR_HAND_COLOR = "#00FF99"
+    SECOND_HAND_COLOR = "#FF5555"
     def __init__(self):
-        init_db()  # Ensure DB and table are created before anything else
         super().__init__()
+        init_db()  # Ensure DB and table are created before anything else
+        # Set background color to black
+        self.configure(bg=self.BG_COLOR) 
         self.title("Prayer Times")
 
         # Get screen width and height
@@ -16,8 +23,7 @@ class MainWindow(tk.Tk):
 
         # Set geometry to full screen size (e.g., "1920x1080")
         self.geometry(f"{screen_width}x{screen_height}+0+0")
-        # Set background color to black
-        self.configure(bg="#000000") 
+
 
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
@@ -34,10 +40,17 @@ class MainWindow(tk.Tk):
             self.quit
         )
 
+        # Analog clock canvas
+        self.analog_canvas_size = 250
+        self.analog_clock = tk.Canvas(self, width=self.analog_canvas_size, height=self.analog_canvas_size, bg=self.BG_COLOR, highlightthickness=0)
+        self.analog_clock.pack(pady=(20, 10))
+        self.update_analog_clock()  # Start analog clock
+
         # Current clock label
         # Green text color
-        self.clock_label = tk.Label(self, text="", font=("Arial", 14), bg="#000000", fg="#006853") 
-        self.clock_label.pack(pady=(0, 10))
+        self.clock_label = tk.Label(self, text="", font=("Arial", 36, "bold"), bg=self.BG_COLOR, fg=self.PRIMARY_COLOR)
+        self.clock_label.pack(pady=(10, 40))
+
 
         # Start the clock update loop
         self.update_clock()
@@ -50,6 +63,56 @@ class MainWindow(tk.Tk):
         self.prayer_frame.pack(pady=10)
         # Schedule daily prayer time update at midnight
         self.schedule_midnight_update()
+
+    def update_analog_clock(self):
+        """Draw analog clock hands and update every second."""
+        self.analog_clock.delete("all")
+        size = self.analog_canvas_size
+        center = size // 2
+        radius = size // 2 - 10
+
+        # Draw clock face
+        self.analog_clock.create_oval(center - radius, center - radius, center + radius, center + radius, outline=self.PRIMARY_COLOR, width=4)
+
+        # Hour marks
+        for i in range(12):
+            angle = math.radians(i * 30)
+            x_start = center + radius * 0.85 * math.sin(angle)
+            y_start = center - radius * 0.85 * math.cos(angle)
+            x_end = center + radius * 0.95 * math.sin(angle)
+            y_end = center - radius * 0.95 * math.cos(angle)
+            self.analog_clock.create_line(x_start, y_start, x_end, y_end, fill=self.PRIMARY_COLOR, width=2)
+
+        now = datetime.datetime.now()
+        hour = now.hour % 12
+        minute = now.minute
+        second = now.second
+
+        # Angles
+        hour_angle = math.radians((hour + minute / 60) * 30)
+        minute_angle = math.radians((minute + second / 60) * 6)
+        second_angle = math.radians(second * 6)
+
+        # Draw hour hand
+        hour_len = radius * 0.5
+        hour_x = center + hour_len * math.sin(hour_angle)
+        hour_y = center - hour_len * math.cos(hour_angle)
+        self.analog_clock.create_line(center, center, hour_x, hour_y, fill="#00FF99", width=5)
+
+        # Draw minute hand
+        minute_len = radius * 0.7
+        minute_x = center + minute_len * math.sin(minute_angle)
+        minute_y = center - minute_len * math.cos(minute_angle)
+        self.analog_clock.create_line(center, center, minute_x, minute_y, fill="#00FF99", width=3)
+
+        # Draw second hand
+        second_len = radius * 0.9
+        second_x = center + second_len * math.sin(second_angle)
+        second_y = center - second_len * math.cos(second_angle)
+        self.analog_clock.create_line(center, center, second_x, second_y, fill="#FF5555", width=1)
+
+        # Schedule next update
+        self.after(1000, self.update_analog_clock)
 
 
     def on_country_change_menu(self):
@@ -85,4 +148,5 @@ class MainWindow(tk.Tk):
         """Update prayer times for the new day and reschedule for next midnight."""
         self.prayer_frame.date = datetime.date.today()
         self.prayer_frame.update_times()
+        # Schedule daily prayer time update at midnight
         self.schedule_midnight_update()
