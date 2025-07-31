@@ -56,3 +56,20 @@ def get_prayer_times_from_db(date, city):
             "Isha": row[4]
         }
     return None
+def get_prayer_times_range_from_db(start_date, end_date, city):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT date, fajr, dhuhr, asr, maghrib, isha
+        FROM prayer_times
+        WHERE city = ? AND date BETWEEN ? AND ?
+    ''', (city, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return {row[0]: {
+        "Fajr": row[1], "Dhuhr": row[2], "Asr": row[3],
+        "Maghrib": row[4], "Isha": row[5]
+    } for row in rows}
