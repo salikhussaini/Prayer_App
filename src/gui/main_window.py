@@ -5,6 +5,21 @@ from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
 from src.gui.menu import PrayerMenu
 from src.core.db import init_db
 
+from datetime import timedelta
+from src.core.db import get_prayer_times_from_db
+from src.core.api import ensure_future_data
+
+def check_and_ensure_tomorrow_data(city, country):
+    tomorrow = datetime.datetime.now().date() + timedelta(days=1)
+    # Check if prayer times for tomorrow exist in DB
+    data = get_prayer_times_from_db(tomorrow, city)
+    if data is None:
+        print(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
+        ensure_future_data(city=city, country=country, days=30)  # Prefetch next 7 days
+    else:
+        print(f"Prayer times for {city}, {country} on {tomorrow} are already available.")
+
+
 class MainWindow(tk.Tk):
     BG_COLOR = "#000000"
     PRIMARY_COLOR = "#006853"
@@ -28,6 +43,7 @@ class MainWindow(tk.Tk):
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
 
+        check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
         # Menu bar using PrayerMenu
         self.menu = PrayerMenu(
             self,
@@ -144,7 +160,6 @@ class MainWindow(tk.Tk):
         midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
         ms_until_midnight = int((midnight - now).total_seconds() * 1000)
         self.after(ms_until_midnight, self.midnight_update)
-
     def midnight_update(self):
         """Update prayer times for the new day and reschedule for next midnight."""
         self.prayer_frame.date = datetime.date.today()
