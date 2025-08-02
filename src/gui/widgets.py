@@ -93,34 +93,96 @@ class PrayerTimesFrame(tk.Frame):
             self.labels[prayer].config(text=formatted_time)
         self.update_next_prayer()
 
+    def format_time_delta(self, delta):
+        """
+        Convert a timedelta object into hours and minutes.
+
+        Args:
+            delta (datetime.timedelta): The time difference to format.
+
+        Returns:
+            tuple: (hours, minutes) representing the delta.
+        """
+        # Get total seconds from timedelta
+        total_seconds = int(delta.total_seconds())
+        # Calculate full hours and leftover seconds
+        hours, remainder = divmod(total_seconds, 3600)
+        # Calculate full minutes from remainder seconds
+        minutes, _ = divmod(remainder, 60)
+        return hours, minutes
+
     def update_next_prayer(self):
-        """Calculate and display time until next prayer."""
+        """
+        Calculate and display the time remaining until the next prayer.
+
+        - Checks all today's prayer times and finds the soonest upcoming prayer.
+        - If no more prayers remain today, fetches and displays time until tomorrow's Fajr.
+        - Updates the label widget to show the next prayer and countdown.
+        """
+        # Current date and time
         now = datetime.datetime.now()
+        # Will hold the name of the next prayer
         next_prayer = None
+        # Smallest time difference to next prayer
         min_delta = None
+
+        # Loop through today's prayers to find the next upcoming one
         for prayer in self.PRAYERS:
+            # Get prayer time string and convert to datetime object
             time_str = self.current_times.get(prayer, "--:--")
             try:
+                # Parse prayer time and combine with today's date to get a datetime object
                 prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
+                
+                # Skip if prayer time has already passed
                 if prayer_time < now:
                     continue
+                 # Time difference between now and prayer time
                 delta = prayer_time - now
+                # If this is the first future prayer found, or if it occurs sooner than the current next prayer candidate
                 if min_delta is None or delta < min_delta:
                     min_delta = delta
                     next_prayer = prayer
-            except Exception:
+            except ValueError:
+                # Time string could not be parsed, skip this prayer
                 continue
+            except Exception as e:
+                continue
+
         if next_prayer and min_delta:
-            hours, remainder = divmod(min_delta.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
+            # Format the time delta into hours and minutes for display
+            hours, minutes = self.format_time_delta(min_delta)
+            # Update UI label with next prayer and countdown
             self.next_prayer_label.config(
                 text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
             )
-        else:
-            self.next_prayer_label.config(text="No more prayers today.")
+            # Exit early since next prayer is found
+            return
 
-        # Refresh every 60 seconds
-        self.after(60000, self.update_next_prayer)
+        # If all prayers today have passed, calculate time until tomorrow's Fajr
+        try:
+            # Date for tomorrow
+            tomorrow = now.date() + datetime.timedelta(days=1)
+            # Fetch prayer times for tomorrow at current location
+            tomorrow_times = calculate_prayer_times(tomorrow, self.location)
+            # Get tomorrow's Fajr time string
+            fajr_time_str = tomorrow_times.get("Fajr")
+            if fajr_time_str:
+                # Parse Fajr time and combine with tomorrow's date
+                fajr_time = datetime.datetime.combine(tomorrow, datetime.datetime.strptime(fajr_time_str, "%H:%M").time())
+                # Time difference to tomorrow's Fajr
+                delta = fajr_time - now
+                hours, minutes = self.format_time_delta(delta)
+                # Update label to show countdown to tomorrow's Fajr
+                self.next_prayer_label.config(
+                    text=f"Next prayer: Fajr (tomorrow) in {hours}h {minutes}m"
+                )
+            else:
+                # No Fajr time available for tomorrow
+                self.next_prayer_label.config(text="No prayer times available for tomorrow.")
+        except Exception as e:
+            self.next_prayer_label.config(text="Error fetching tomorrow's prayer times.")
+
     def check_prayer_alerts(self):
         """
         Periodically check if it's time to alert the user for any upcoming prayer.
