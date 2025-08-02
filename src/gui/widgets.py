@@ -60,10 +60,10 @@ class PrayerTimesFrame(tk.Frame):
             frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=10, pady=10)
             frame.grid(row=2, column=idx, padx=20, pady=20, sticky="nsew")
 
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 35, "bold"), bg="#000000", fg="#006853")
+            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 25, "bold"), bg="#000000", fg="#006853")
             lbl_prayer.pack(padx=10, pady=(10, 5))
 
-            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 45), bg="#000000", fg="#006853")
+            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 25), bg="#000000", fg="#006853")
             lbl_time.pack(padx=10, pady=(5, 10))
 
             self.labels[prayer] = lbl_time
