@@ -38,7 +38,7 @@ class PrayerTimesFrame(tk.Frame):
         self.current_times = {}
         self.next_prayer_label = tk.Label(self, text="", font=("Arial", 24, "bold"), fg="#006853", bg="#000000")
 
-        self.next_prayer_label.grid(row=1, column=0, columnspan=5, pady=(10, 20))
+        self.next_prayer_label.grid(row=1, column=0, columnspan=5)
         for col in range(5):
             self.grid_columnconfigure(col, weight=1)
 
@@ -51,19 +51,19 @@ class PrayerTimesFrame(tk.Frame):
 
 
         self.pack_propagate(False)
-        self.configure(padx=40, pady=40)
+        self.configure(padx=10, pady=10)
 
     def _init_labels(self):
         """Initialize prayer time labels with individual boxes."""
         prayers = self.PRAYERS
         for idx, prayer in enumerate(prayers):
-            frame = tk.Frame(self, bd=5, relief="ridge", bg="#000000", padx=25, pady=25)
+            frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=10, pady=10)
             frame.grid(row=2, column=idx, padx=20, pady=20, sticky="nsew")
 
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 20, "bold"), bg="#000000", fg="#006853")
+            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 14, "bold"), bg="#000000", fg="#006853")
             lbl_prayer.pack(padx=10, pady=(10, 5))
 
-            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 28, "bold"), bg="#000000", fg="#006853")
+            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 20, "bold"), bg="#000000", fg="#006853")
             lbl_time.pack(padx=10, pady=(5, 10))
 
             self.labels[prayer] = lbl_time

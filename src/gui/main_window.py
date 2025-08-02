@@ -57,33 +57,35 @@ class MainWindow(tk.Tk):
         )
 
         # Configure grid weights
-        self.grid_rowconfigure(0, weight=1)  # prayer frame expands vertically
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(1, weight=1)  # prayer frame expands vertically
+        self.grid_columnconfigure(0, weight=1)
+
+        # --- Create a top frame to hold both analog and digital clocks ---
+        self.top_frame = tk.Frame(self, bg=self.BG_COLOR)
+        self.top_frame.grid(row=0, column=0, sticky="nw", padx=20, pady=20)
 
 
-        # Analog clock canvas
-        self.analog_canvas_size = 250
+        # Analog clock (top left)
+        self.analog_canvas_size = 200
         self.analog_clock = tk.Canvas(
-            self,
+            self.top_frame,
             width=self.analog_canvas_size,
             height=self.analog_canvas_size,
             bg=self.BG_COLOR,
             highlightthickness=0
         )
-        self.analog_clock.grid(row=0, column=0, pady=(20, 10), sticky="n")
+        self.analog_clock.pack(side="left", padx=(0, 20))
         self.update_analog_clock()
-        
-        # Clock label
+        # Digital clock (right of analog)
         self.clock_label = tk.Label(
-            self,
+            self.top_frame,
             text="",
-            font=("Arial", 36, "bold"),
+            font=("Arial", 32, "bold"),
             bg=self.BG_COLOR,
             fg=self.PRIMARY_COLOR
         )
-        self.clock_label.grid(row=0, column=1, pady=(0, 0), sticky="n")
+        self.clock_label.pack(side="left", anchor="n", pady=20)
         self.update_clock()
-
         # Prayer frame
         self.prayer_frame = PrayerTimesFrame(
             self,
