@@ -57,7 +57,7 @@ class PrayerTimesFrame(tk.Frame):
         """Initialize prayer time labels with individual boxes."""
         prayers = self.PRAYERS
         for idx, prayer in enumerate(prayers):
-            frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=10, pady=10)
+            frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=5, pady=5)
             frame.grid(row=2, column=idx, padx=20, pady=20, sticky="nsew")
 
             lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 25, "bold"), bg="#000000", fg="#006853")
