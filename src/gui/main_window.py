@@ -66,7 +66,7 @@ class MainWindow(tk.Tk):
 
 
         # Analog clock (top left)
-        self.analog_canvas_size = 200
+        self.analog_canvas_size = 250
         self.analog_clock = tk.Canvas(
             self.top_frame,
             width=self.analog_canvas_size,
