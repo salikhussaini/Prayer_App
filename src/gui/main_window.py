@@ -80,7 +80,7 @@ class MainWindow(tk.Tk):
         self.clock_label = tk.Label(
             self.top_frame,
             text="",
-            font=("Arial", 32, "bold"),
+            font=("Arial", 85, "bold"),
             bg=self.BG_COLOR,
             fg=self.PRIMARY_COLOR
         )
