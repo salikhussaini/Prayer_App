@@ -150,13 +150,19 @@ class PrayerTimesFrame(tk.Frame):
                 continue
 
         if next_prayer and min_delta:
-            # Format the time delta into hours and minutes for display
-            hours, minutes = self.format_time_delta(min_delta)
-            # Update UI label with next prayer and countdown
-            self.next_prayer_label.config(
-                text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
-            )
-            # Exit early since next prayer is found
+            total_seconds = int(min_delta.total_seconds())
+            if total_seconds < 3600:
+                minutes, seconds = divmod(total_seconds, 60)
+                self.next_prayer_label.config(
+                    text=f"Next prayer: {next_prayer} in {minutes}m {seconds}s"
+                )
+                self.after(1000, self.update_next_prayer)  # update every second
+            else:
+                hours, minutes = self.format_time_delta(min_delta)
+                self.next_prayer_label.config(
+                    text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
+                )
+                self.after(60000, self.update_next_prayer)  # update every minute
             return
 
         # If all prayers today have passed, calculate time until tomorrow's Fajr
