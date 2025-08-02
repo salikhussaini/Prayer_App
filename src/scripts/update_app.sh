@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /home/pi/yourrepo
+#cd /home/pi/yourrepo
 
 # Fetch latest changes
 git fetch

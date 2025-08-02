@@ -56,30 +56,43 @@ class MainWindow(tk.Tk):
             self.quit
         )
 
-        # Accept canvas size as a parameter or use screen scaling
-        self.analog_canvas_size = int(screen_height * 0.25)
+        # Configure grid weights
+        self.grid_rowconfigure(0, weight=1)  # prayer frame expands vertically
+        self.grid_columnconfigure(1, weight=1)
+
+
+        # Analog clock canvas
         self.analog_canvas_size = 250
-        self.analog_clock = tk.Canvas(self, width=self.analog_canvas_size, height=self.analog_canvas_size, bg=self.BG_COLOR, highlightthickness=0)
-        self.analog_clock.pack(pady=(20, 10))
-        self.update_analog_clock()  # Start analog clock
-
-        # Current clock label
-        # Green text color
-        self.clock_label = tk.Label(self, text="", font=("Arial", 36, "bold"), bg=self.BG_COLOR, fg=self.PRIMARY_COLOR)
-        self.clock_label.pack(pady=(10, 40))
-
-
-        # Start the clock update loop
+        self.analog_clock = tk.Canvas(
+            self,
+            width=self.analog_canvas_size,
+            height=self.analog_canvas_size,
+            bg=self.BG_COLOR,
+            highlightthickness=0
+        )
+        self.analog_clock.grid(row=0, column=0, pady=(20, 10), sticky="n")
+        self.update_analog_clock()
+        
+        # Clock label
+        self.clock_label = tk.Label(
+            self,
+            text="",
+            font=("Arial", 36, "bold"),
+            bg=self.BG_COLOR,
+            fg=self.PRIMARY_COLOR
+        )
+        self.clock_label.grid(row=0, column=1, pady=(0, 0), sticky="n")
         self.update_clock()
 
-        # Prayer times frame    
+        # Prayer frame
         self.prayer_frame = PrayerTimesFrame(
-            self, date=datetime.date.today(),
+            self,
+            date=datetime.date.today(),
             location={"city": self.city_var.get(), "country": self.country_var.get()}
         )
-        self.prayer_frame.pack(pady=10)
-        # Schedule daily prayer time update at midnight
+        self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         self.schedule_midnight_update()
+
 
     def update_analog_clock(self):
         """Draw analog clock hands and update every second."""
