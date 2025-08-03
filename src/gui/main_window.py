@@ -16,8 +16,6 @@ def check_and_ensure_tomorrow_data(city, country):
     if data is None:
         print(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
         ensure_future_data(city=city, country=country, days=30)  # Prefetch next 7 days
-    else:
-        print(f"Prayer times for {city}, {country} on {tomorrow} are already available.")
 
 
 class MainWindow(tk.Tk):

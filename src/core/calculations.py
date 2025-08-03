@@ -8,7 +8,6 @@ def calculate_prayer_times(date, location):
     times = get_prayer_times_from_db(date, city)
 
     if times:
-        print(f"Data found for {city}, {country} on {date}: {times}")
         return times
 
     print(f"No data found for {city}, {country} on {date}.")
