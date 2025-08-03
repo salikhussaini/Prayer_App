@@ -44,7 +44,7 @@ def get_prayer_times_from_db(date, city):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT fajr, dhuhr, asr, maghrib, isha FROM prayer_times
+        SELECT fajr, dhuhr, asr, maghrib, isha, hijri_date FROM prayer_times
         WHERE date=? AND city=?
     """, (date.strftime("%Y-%m-%d"), city))
     row = cursor.fetchone()
@@ -55,7 +55,8 @@ def get_prayer_times_from_db(date, city):
             "Dhuhr": row[1],
             "Asr": row[2],
             "Maghrib": row[3],
-            "Isha": row[4]
+            "Isha": row[4],
+            "hijri_date": row[5]
         }
     return None
 def get_prayer_times_range_from_db(start_date, end_date, city):
