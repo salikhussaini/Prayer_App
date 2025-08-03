@@ -70,7 +70,8 @@ class MainWindow(tk.Tk):
             bg=self.BG_COLOR,
             highlightthickness=0
         )
-        self.analog_clock.grid(row=0, column=0, rowspan=3, padx=(0, 20), sticky="nw")
+        # Analog clock
+        self.analog_clock.grid(row=0, column=0, rowspan=2, padx=(0, 20), sticky="nw")
         self.update_analog_clock()
 
         # --- Clock frame to stack digital clock and both dates vertically ---
@@ -85,28 +86,35 @@ class MainWindow(tk.Tk):
             bg=self.BG_COLOR,
             fg=self.PRIMARY_COLOR
         )
-        self.clock_label.grid(row=0, column=0, pady=(0, 10))
+        # Digital clock
+        self.clock_label.grid(row=0, column=1, sticky="nw", pady=(0, 10))
         self.update_clock()
-
+        # Gregorian and Hijri dates in a sub-frame
+        self.date_frame = tk.Frame(self.top_frame, bg=self.BG_COLOR)
+        self.date_frame.grid(row=1, column=1, sticky="ne")
         # --- Gregorian date (below digital clock) ---
         self.gregorian_label = tk.Label(
-            self.clock_frame,
+            self.date_frame,
             text="",
-            font=("Arial", 30),
+            font=("Arial", 28),
             bg=self.BG_COLOR,
-            fg=self.PRIMARY_COLOR
+            fg=self.PRIMARY_COLOR,
+            anchor="e",
+            justify="right"
         )
-        self.gregorian_label.grid(row=1, column=0)
+        self.gregorian_label.pack(fill="x", anchor="e")
 
         # --- Hijri date (below Gregorian date) ---
         self.hijri_label = tk.Label(
-            self.clock_frame,
+            self.date_frame,
             text="",
-            font=("Arial", 30),
+            font=("Arial", 28),
             bg=self.BG_COLOR,
-            fg=self.PRIMARY_COLOR
+            fg=self.PRIMARY_COLOR,
+            anchor="e",
+            justify="right"
         )
-        self.hijri_label.grid(row=2, column=0)
+        self.hijri_label.pack(fill="x", anchor="e")
         # Prayer frame
         self.prayer_frame = PrayerTimesFrame(
             self,
