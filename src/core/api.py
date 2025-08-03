@@ -26,8 +26,12 @@ def fetch_prayer_times_from_api(date, city, country=""):
     try:
         response = requests.get(API_URL_SINGLE, params=params)
         response.raise_for_status()
-        data = response.json()["data"]["timings"]
-        print(f"API data extracted for {city}, {country} on {date}: {data}")
+        response_json = response.json()["data"]
+        data = response_json["timings"]
+        greg_date_str = response_json["date"]["gregorian"]["date"]
+        hijri_date_str = response_json["date"]["hijri"]["date"]
+        # Convert to datetime object
+        date = datetime.strptime(greg_date_str, "%d-%m-%Y").date()
 
         times = {
             "Fajr": convert_to_24hr(data["Fajr"]),
@@ -37,7 +41,7 @@ def fetch_prayer_times_from_api(date, city, country=""):
             "Isha": convert_to_24hr(data["Isha"])
         }
 
-        store_prayer_times(date, city, times)
+        store_prayer_times(date, hijri_date_str,city, times)
         return times
     except Exception as e:
         print(f"API error for {city}, {country} on {date}: {e}")
@@ -63,11 +67,13 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
         data = response.json()
 
         # The API returns data in data.data array for each day
-        for day_data in data.get("data", []):
+        for day_data in data.get("data", []):            
             greg_date_str = day_data["date"]["gregorian"]["date"]  # e.g. "01-02-2025"
+            hijri_date_str = day_data['date']['hijri']['date'] # e.g. "01-02-1446"
+            # Convert to datetime object
             date = datetime.strptime(greg_date_str, "%d-%m-%Y").date()
             timings = day_data["timings"]
-            
+            # Convert timings to 24-hour format
             times = {
                 "Fajr": convert_to_24hr(clean_timezone_suffix(timings["Fajr"])),
                 "Dhuhr": convert_to_24hr(clean_timezone_suffix(timings["Dhuhr"])),
@@ -75,8 +81,8 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
                 "Maghrib": convert_to_24hr(clean_timezone_suffix(timings["Maghrib"])),
                 "Isha": convert_to_24hr(clean_timezone_suffix(timings["Isha"]))
             }
-
-            store_prayer_times(date, city, times)
+            # Store in DB
+            store_prayer_times(date, hijri_date_str,city, times)
         print(f"Stored prayer times for {city} on between {start_date} and {end_date} successfully.")
 
         return True
@@ -115,5 +121,4 @@ def ensure_future_data(city, country="", days=7):
                 fetch_prayer_times_from_api(date, city, country)
             except Exception:
                 print(f"Failed to fetch prayer times for {date}, {city}")
-
     return True

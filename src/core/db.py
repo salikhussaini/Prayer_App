@@ -8,6 +8,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS prayer_times (
             date TEXT,
+            hijri_date TEXT,
             city TEXT,
             fajr TEXT,
             dhuhr TEXT,
@@ -20,14 +21,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-def store_prayer_times(date, city, times):
+def store_prayer_times(date, hijri_date, city, times):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO prayer_times (date, city, fajr, dhuhr, asr, maghrib, isha)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO prayer_times (date, hijri_date, city, fajr, dhuhr, asr, maghrib, isha)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         date.strftime("%Y-%m-%d"),
+        hijri_date,
         city,
         times["Fajr"],
         times["Dhuhr"],
