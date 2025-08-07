@@ -1,6 +1,9 @@
 import tkinter as tk
 import datetime
 from src.core.calculations import calculate_prayer_times
+import threading
+from playsound import playsound
+import os
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
@@ -216,7 +219,7 @@ class PrayerTimesFrame(tk.Frame):
         Alerts once when prayer time is within 60 seconds and prevents duplicate alerts.
         """
         now = datetime.datetime.now()
-        future = now + datetime.timedelta(minutes=68)
+        #now = now + datetime.timedelta(minutes=30)
         min_delta = None
         next_prayer_to_alert = None
 
@@ -255,31 +258,17 @@ class PrayerTimesFrame(tk.Frame):
         # Re-check after 1 minute
         self.after(60000, self.check_prayer_alerts)
     def alert_user(self, prayer):
-        # Create popup
-        alert = tk.Toplevel(self)
-        alert.title("Prayer Time")
-        alert.configure(bg="#000000")
-        alert.geometry("350x150+500+300")
-        alert.resizable(False, False)
-        # Make it modal
-        alert.grab_set()
-        alert.focus_force()
-        # Auto close after 2 minute (60000 milliseconds)
-        alert.after(60000*2, alert.destroy)
-    
-        # Content
-        frame = tk.Frame(alert, bg="#000000")
-        frame.pack(padx=20, pady=20)
+        """
+        Play Athan sound when it's time for a prayer.
+        Prevents GUI blocking by running audio in a separate thread.
+        """
+        def play_athan():
+            try:
+                athan_path = os.path.join("src/assets", "athan.mp3")
+                playsound(athan_path)
+            except Exception as e:
+                print(f"Error playing Athan for {prayer}: {e}")
 
-        if prayer == "Fajr":
-            message = "الصلاة خير من النوم\nPrayer is better than sleep."
-            dua = "اللهم اجعلنا من المستيقظين لصلاة الفجر"
-        else:
-            message = "May Allah accept your prayer."
-            dua = "اللهم تقبل صلاتنا وصلاتكم"
-
-        # Display prayer time alert
-        tk.Label(frame, text=f"🕌 It's time for {prayer} prayer", font=("Arial", 18, "bold"), fg="#006853", bg="#000000").pack(pady=(0, 15))
-        tk.Label(frame, text=message, font=("Arial", 16), fg="#006853", bg="#000000").pack(pady=(0, 10))
-        tk.Label(frame, text=dua, font=("Arial", 14, "italic"), fg="#006853", bg="#000000").pack(pady=(0, 15))
-        tk.Button(frame, text="OK", font=("Arial", 14, "bold"), command=alert.destroy, bg="#000000", fg="#006853").pack(pady=(10, 0))
+        # Only play Athan for valid prayers
+        if prayer in self.PRAYERS:
+            threading.Thread(target=play_athan, daemon=True).start()
