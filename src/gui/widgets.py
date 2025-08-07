@@ -268,7 +268,16 @@ class PrayerTimesFrame(tk.Frame):
                 playsound(athan_path)
             except Exception as e:
                 print(f"Error playing Athan for {prayer}: {e}")
+        def play_fajr_athan():
+            try:
+                athan_path = os.path.join("src/assets", "fajr_athan.mp3")
+                playsound(athan_path)
+            except Exception as e:
+                print(f"Error playing Athan for {prayer}: {e}")
 
         # Only play Athan for valid prayers
         if prayer in self.PRAYERS:
-            threading.Thread(target=play_athan, daemon=True).start()
+            if prayer == "Fajr":
+                threading.Thread(target=play_fajr_athan, daemon=True).start()
+            else: 
+                threading.Thread(target=play_athan, daemon=True).start()
