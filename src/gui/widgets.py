@@ -58,7 +58,14 @@ class PrayerTimesFrame(tk.Frame):
         self.configure(padx=10, pady=10)
 
     def _init_labels(self):
-        """Initialize prayer time labels with individual boxes."""
+        """Initialize and layout all prayer time label widgets.
+
+        Creates:
+        - A frame for each prayer (Fajr, Dhuhr, Asr, Maghrib, Isha)
+        - Prayer name label
+        - Time display label
+        - Stores references in self.labels dictionary
+        """
         prayers = self.PRAYERS
         for idx, prayer in enumerate(prayers):
             frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=5, pady=5)
@@ -73,13 +80,33 @@ class PrayerTimesFrame(tk.Frame):
             self.labels[prayer] = lbl_time
         
     def on_location_change(self):
-        """Update location and refresh prayer times."""
+        """Handle location change events.
+        
+        Performs:
+        1. Clears any existing prayer alerts
+        2. Updates displayed prayer times
+        3. Resets next prayer countdown
+        """
         self.update_times()
         self.update_next_prayer()
         self.alerted_prayers.clear()  # reset alerts for new location
 
     def update_times(self, times=None):
-        """Update the displayed prayer times in AM/PM format."""
+        """Update displayed prayer times with optional override values.
+        
+        Args:
+            times (dict, optional): Pre-calculated prayer times in {'Prayer': 'HH:MM'} format.
+                                    If None, times will be calculated automatically.
+                                    
+        Behavior:
+        - Converts 24-hour times to 12-hour AM/PM format
+        - Handles calculation errors gracefully
+        - Updates all prayer time labels
+        - Triggers next prayer countdown update
+        
+        Note: Passing times parameter bypasses calculation - use for testing or
+            when you have pre-computed times.
+        """
         if times is None:
             try:
                 times = calculate_prayer_times(self.date, self.location)
@@ -214,10 +241,21 @@ class PrayerTimesFrame(tk.Frame):
             self.after(60000, self.update_next_prayer)
 
     def check_prayer_alerts(self):
-        """
-        Periodically check if it's time to alert the user for any upcoming prayer.
-
-        Alerts once when prayer time is within 60 seconds and prevents duplicate alerts.
+        """Monitor prayer times and trigger alerts when appropriate.
+        
+        Operation:
+        1. Checks all upcoming prayer times
+        2. Finds the next occurring prayer
+        3. Triggers audio alert when prayer time is within 60 seconds
+        4. Prevents duplicate alerts using alerted_prayers set
+        
+        Scheduling:
+        - Checks more frequently as prayer time approaches:
+        - Every 10 seconds when <60 seconds away
+        - Every minute when <1 hour away
+        - Every 10 minutes otherwise
+        
+        Note: Runs continuously via tkinter's after() scheduler.
         """
         #now = now + datetime.timedelta(minutes=30)
         now = datetime.datetime.now()
@@ -271,9 +309,16 @@ class PrayerTimesFrame(tk.Frame):
         
 
     def alert_user(self, prayer):
-        """
-        Play Athan sound when it's time for a prayer.
-        Prevents GUI blocking by running audio in a separate thread.
+        """Play audio alert for specified prayer time.
+        
+        Args:
+            prayer (str): Name of prayer to alert for (must be in PRAYERS)
+        
+        Plays different audio files for:
+        - Fajr: Special fajr_athan.mp3
+        - Other prayers: Standard athan.mp3
+        
+        Note: Runs audio in separate thread to avoid GUI blocking.
         """
         def play_athan():
             try:
@@ -296,7 +341,11 @@ class PrayerTimesFrame(tk.Frame):
                 threading.Thread(target=play_athan, daemon=True).start()
     
     def schedule_midnight_reset(self):
-        """Schedules the prayer alerts reset to run exactly at midnight every day."""
+        """Schedule daily reset of prayer alerts at midnight.
+    
+        Calculates exact milliseconds until next midnight and schedules
+        _midnight_reset_wrapper to execute at that time.
+        """
         now = datetime.datetime.now()
 
         # Calculate next midnight (start of the next day)
@@ -310,7 +359,15 @@ class PrayerTimesFrame(tk.Frame):
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
 
     def _midnight_reset_wrapper(self):
-        """Wrapper to reset alerts and reschedule next midnight reset."""
+        """Wrapper function for midnight reset operations.
+        
+        Handles:
+        1. Executing reset_alerts()
+        2. Recalculating next midnight
+        3. Rescheduling itself for following day
+        
+        Ensures daily prayer alert resets remain precisely timed.
+        """
         self.reset_alerts()
         self.update_times()        # refresh prayer times for new day
         self.update_next_prayer()  # refresh next prayer countdown
@@ -324,7 +381,14 @@ class PrayerTimesFrame(tk.Frame):
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
         
     def reset_alerts(self):
-        """Clear alerted prayers set at midnight and refresh times."""
+        """Reset all prayer alert tracking at day boundary.
+        
+        Performs:
+        1. Clears alerted_prayers set
+        2. Updates to current date
+        3. Refreshes prayer times display
+        4. Restarts countdown and alert checks
+        """
         self.alerted_prayers.clear()
         self.date = datetime.date.today()  # update to new day
         self.update_times()                # refresh prayer times

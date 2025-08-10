@@ -10,6 +10,18 @@ from src.core.db import get_prayer_times_from_db
 from src.core.api import ensure_future_data
 
 def check_and_ensure_tomorrow_data(city, country):
+    """Ensure prayer times for tomorrow are available in the database.
+    
+    Args:
+        city (str): City name to check data for
+        country (str): Country name to check data for
+        
+    Behavior:
+        1. Checks if tomorrow's prayer times exist in database
+        2. If not found, fetches next 30 days of prayer times via API
+        3. Prints status messages about the operation
+    """
+
     tomorrow = datetime.datetime.now().date() + timedelta(days=1)
     # Check if prayer times for tomorrow exist in DB
     data = get_prayer_times_from_db(tomorrow, city)
@@ -24,6 +36,17 @@ class MainWindow(tk.Tk):
     SECOND_HAND_COLOR = "#FF5555"
 
     def __init__(self):
+        """Initialize the main application window.
+        
+        Sets up:
+        - Database connection
+        - Fullscreen window configuration
+        - Default location (Chicago, USA)
+        - Menu system
+        - Clock displays (analog and digital)
+        - Prayer times frame
+        - Automatic midnight updates
+        """
         super().__init__()
         init_db()  # Ensure DB and table are created before anything else
         # Set background color to black
@@ -37,7 +60,7 @@ class MainWindow(tk.Tk):
         # Set geometry to full screen size (e.g., "1920x1080")
         self.geometry(f"{screen_width}x{screen_height}+0+0")
 
-
+        self.last_date = datetime.datetime.now().date()
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
 
@@ -125,7 +148,6 @@ class MainWindow(tk.Tk):
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         self.schedule_midnight_update()
-        self.last_date = datetime.datetime.now().date()
     def update_analog_clock(self):
         """Draw analog clock hands and update every second."""
         self.analog_clock.delete("all")
@@ -176,6 +198,18 @@ class MainWindow(tk.Tk):
         # Schedule next update
         self.after(1000, self.update_analog_clock)
     def update_hijri_date_from_db(self):
+        """Fetch and display the current Hijri date from database.
+        
+        Performs:
+        1. Gets today's Gregorian date and formats it for display
+        2. Fetches corresponding Hijri date from database
+        3. Formats Hijri date with month names from mapping
+        4. Updates both date labels in the UI
+        
+        Handles cases where:
+        - Hijri date is not available in database
+        - Date formatting fails
+        """
         hijri_months = {
             1: {"english": "Muharram", "arabic": "مُحَرَّم"},
             2: {"english": "Safar", "arabic": "صَفَر"},
@@ -190,7 +224,6 @@ class MainWindow(tk.Tk):
             11: {"english": "Dhu al-Qi'dah", "arabic": "ذُو ٱلْقِعْدَة"},
             12: {"english": "Dhu al-Hijjah", "arabic": "ذُو ٱلْحِجَّة"}
         }
-        """Fetch Hijri date from DB and update label."""
         date = datetime.date.today()
         # Format date for display year-month-day
         date_str = date.strftime(r"%b-%d-%Y")
@@ -212,17 +245,32 @@ class MainWindow(tk.Tk):
         else:
             self.hijri_label.config(text="Hijri date not found")
     def on_country_change_menu(self):
+        """Handle country selection change from menu.
+        
+        Updates the city dropdown to show cities for the newly selected country
+        and resets the default city to the first city in the list.
+        """
         cities = COUNTRY_CITIES[self.country_var.get()]
         self.city_var.set(cities[0])
         self.menu.update_city_menu()
         self.update_prayer_frame_location()
     def update_prayer_frame_location(self):
+        """Update the prayer times display with new location data.
+        
+        Synchronizes the prayer frame's location with the current selected
+        city and country values from the dropdown menus.
+        """
         self.prayer_frame.location = {
             "city": self.city_var.get(),
             "country": self.country_var.get()
         }
         self.prayer_frame.update_times()
     def refresh_prayer_times(self):
+        """Force a refresh of all displayed prayer times.
+        
+        Recalculates and updates all prayer times for the current date and location.
+        Useful when manually triggering a refresh after data changes.
+        """
         self.prayer_frame.update_times()
     def update_clock(self):
         """Update the clock label every second with AM/PM format."""
