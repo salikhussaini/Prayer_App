@@ -2,8 +2,9 @@ import tkinter as tk
 import datetime
 from src.core.calculations import calculate_prayer_times
 import threading
-from playsound import playsound
+import pygame
 import os
+from datetime import timedelta
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
@@ -31,10 +32,15 @@ COUNTRY_CITIES = {
 
 class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+    now = datetime.datetime.now()
+    now = now
+    
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
     def __init__(self, master=None, date=None, location=None):
         super().__init__(master,bg="#000000")
         self.date = date
+        pygame.mixer.init()  # Initialize mixer once on class instantiation
+        self.now = PrayerTimesFrame.now
         self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
         self.alerted_prayers = set()
@@ -56,6 +62,8 @@ class PrayerTimesFrame(tk.Frame):
 
         self.pack_propagate(False)
         self.configure(padx=10, pady=10)
+
+        self.update_clock()
 
     def _init_labels(self):
         """Initialize and layout all prayer time label widgets.
@@ -79,6 +87,14 @@ class PrayerTimesFrame(tk.Frame):
 
             self.labels[prayer] = lbl_time
         
+    def update_clock(self):
+        """Update the clock label every second with AM/PM format."""
+        #PrayerTimesFrame.now = datetime.datetime.now()
+        # For testing future time
+        PrayerTimesFrame.now = datetime.datetime.now()
+        self.now = PrayerTimesFrame.now
+        self.after(1000, self.update_clock)
+
     def on_location_change(self):
         """Handle location change events.
         
@@ -151,7 +167,7 @@ class PrayerTimesFrame(tk.Frame):
         - Updates the label widget to show the next prayer and countdown.
         """
         # Current date and time
-        now = datetime.datetime.now()
+        #now = datetime.datetime.now()
         # Will hold the name of the next prayer
         next_prayer = None
         # Smallest time difference to next prayer
@@ -163,14 +179,14 @@ class PrayerTimesFrame(tk.Frame):
             time_str = self.current_times.get(prayer, "--:--")
             try:
                 prayer_time = datetime.datetime.combine(
-                    now.date(),
+                    PrayerTimesFrame.now.date(),
                     datetime.datetime.strptime(time_str, "%H:%M").time()
                 )
                 # Skip if prayer time has already passed
-                if prayer_time < now:
+                if prayer_time < PrayerTimesFrame.now:
                     continue
                 # Calculate time difference to this prayer
-                delta = prayer_time - now
+                delta = prayer_time - PrayerTimesFrame.now
                 # If this is the first future prayer found, or if it occurs sooner than the current next prayer candidate
                 if min_delta is None or delta < min_delta:
                     min_delta = delta
@@ -184,7 +200,7 @@ class PrayerTimesFrame(tk.Frame):
             if total_seconds < 60:
                 # Just 1 second left, refresh quickly
                 self.next_prayer_label.config(
-                    text=f"Next prayer: {next_prayer} in a few seconds..."
+                    text=f"Next prayer: {next_prayer} in {total_seconds} seconds..."
                 )
                 self.after(1000, self.update_next_prayer)
             elif total_seconds < 3600:
@@ -206,7 +222,7 @@ class PrayerTimesFrame(tk.Frame):
         # If all prayers today have passed, calculate time until tomorrow's Fajr
         try:
             # Date for tomorrow
-            tomorrow = now.date() + datetime.timedelta(days=1)
+            tomorrow = PrayerTimesFrame.now.date() + datetime.timedelta(days=1)
             # Fetch tomorrow's prayer times
             tomorrow_times = calculate_prayer_times(tomorrow, self.location)
             # Get tomorrow's Fajr time string
@@ -217,7 +233,7 @@ class PrayerTimesFrame(tk.Frame):
                     tomorrow,
                     datetime.datetime.strptime(fajr_time_str, "%H:%M").time()
                 )
-                delta = fajr_time - now
+                delta = fajr_time - PrayerTimesFrame.now
                 total_seconds = int(delta.total_seconds())
 
                 # Show hours and minutes for Fajr countdown
@@ -258,7 +274,7 @@ class PrayerTimesFrame(tk.Frame):
         Note: Runs continuously via tkinter's after() scheduler.
         """
         #now = now + datetime.timedelta(minutes=30)
-        now = datetime.datetime.now()
+        #now = datetime.datetime.now()
         seconds_until = None
         next_prayer_to_alert = None
         min_delta = None 
@@ -266,28 +282,29 @@ class PrayerTimesFrame(tk.Frame):
         for prayer, time_str in self.current_times.items():
             try:
                 # Convert string to today's datetime object
-                prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
+                prayer_time = datetime.datetime.combine(PrayerTimesFrame.now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
                 
                 # Skip if this prayer has already passed
-                if prayer_time < now:
+                if prayer_time < PrayerTimesFrame.now:
+                    print(prayer, "has already passed.", prayer_time, "<", PrayerTimesFrame.now)
                     continue
                 
+
                 # Determine if this is the soonest upcoming prayer
-                delta = prayer_time - now
+                delta = prayer_time - PrayerTimesFrame.now
                 seconds_until = delta.total_seconds()
-                next_prayer_to_alert = prayer
                 
                 # Update the minimum delta if this is the first future prayer found,
                 # or if this prayer occurs sooner than the current next prayer candidate
                 if (min_delta is None or delta < min_delta) and seconds_until > 0:
                     #print(f"Checking prayer: {prayer} at {time_str}, delta: {delta}")
                     # Keep track of soonest upcoming prayer
-                    min_delta = delta
+                    min_delta = delta.total_seconds()
                     next_prayer_to_alert = prayer
                 
                 # Alert user if this prayer is within 1 minute
                 seconds_until = delta.total_seconds()
-                if 0 <= seconds_until < 60 and prayer not in self.alerted_prayers:
+                if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
             except Exception:
@@ -295,65 +312,58 @@ class PrayerTimesFrame(tk.Frame):
             except ValueError as e:
                 print(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
+        print(f"Next prayer to alert: {next_prayer_to_alert} in {min_delta} seconds.")
         # Schedule next check based on how soon the next prayer is
-        if seconds_until is not None:
-            if seconds_until < 60:
-                self.after(10000, self.check_prayer_alerts)   # check every 10 sec
-            elif seconds_until < 3600:
-                self.after(60000, self.check_prayer_alerts)   # check every 1 min
-            else:
-                self.after(600000, self.check_prayer_alerts)  # check every 10 min
+        if min_delta is not None:
+            if min_delta < 15:
+                self.after(5000, self.check_prayer_alerts)    # check every 5 sec
+            elif min_delta < 60:
+                self.after(10000, self.check_prayer_alerts)    # check every 10 sec
+            elif min_delta < 75:
+                self.after(20000, self.check_prayer_alerts)    # check every 20 sec
+            elif min_delta < 120:
+                self.after(30000, self.check_prayer_alerts)    # check every 30 sec
+            elif min_delta < 240:
+                self.after(60000, self.check_prayer_alerts)    # check every 60 sec
+            elif min_delta < 360:
+                self.after(66000, self.check_prayer_alerts)    # check every 66 sec
+            elif min_delta < 600:
+                self.after(120000, self.check_prayer_alerts)   # check every 2 minutes
+
         else:
             # No prayers left today — check again in 10 minutes
-            self.after(600000, self.check_prayer_alerts)
+            self.after(600000, self.check_prayer_alerts) # check every 10 min
         
 
     def alert_user(self, prayer):
-        """Play audio alert for specified prayer time.
-        
-        Args:
-            prayer (str): Name of prayer to alert for (must be in PRAYERS)
-        
-        Plays different audio files for:
-        - Fajr: Special fajr_athan.mp3
-        - Other prayers: Standard athan.mp3
-        
-        Note: Runs audio in separate thread to avoid GUI blocking.
-        """
-        def play_athan():
+        def play_athan(path):
             try:
-                athan_path = os.path.join("src/assets", "athan.mp3")
-                playsound(athan_path)
-            except Exception as e:
-                print(f"Error playing Athan for {prayer}: {e}")
-        def play_fajr_athan():
-            try:
-                athan_path = os.path.join("src/assets", "fajr_athan.mp3")
-                playsound(athan_path)
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play()
             except Exception as e:
                 print(f"Error playing Athan for {prayer}: {e}")
 
-        # Only play Athan for valid prayers
         if prayer in self.PRAYERS:
             if prayer == "Fajr":
-                threading.Thread(target=play_fajr_athan, daemon=True).start()
-            else: 
-                threading.Thread(target=play_athan, daemon=True).start()
-    
+                athan_path = os.path.join("src", "assets", "fajr_athan.wav")
+            else:
+                athan_path = os.path.join("src", "assets", "athan.wav")
+
+            threading.Thread(target=play_athan, args=(athan_path,), daemon=True).start()
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight.
     
         Calculates exact milliseconds until next midnight and schedules
         _midnight_reset_wrapper to execute at that time.
         """
-        now = datetime.datetime.now()
+        #now = datetime.datetime.now()
 
         # Calculate next midnight (start of the next day)
-        tomorrow = now + datetime.timedelta(days=1)
+        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
 
         # Time until midnight in milliseconds
-        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
+        ms_until_midnight = int((next_midnight - PrayerTimesFrame.now).total_seconds() * 1000)
 
         # Schedule first reset at midnight
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
@@ -373,10 +383,10 @@ class PrayerTimesFrame(tk.Frame):
         self.update_next_prayer()  # refresh next prayer countdown
 
         # Always recalculate next midnight to prevent drift
-        now = datetime.datetime.now()
-        tomorrow = now + datetime.timedelta(days=1)
+        #now = datetime.datetime.now()
+        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
-        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
+        ms_until_midnight = int((next_midnight - PrayerTimesFrame.now).total_seconds() * 1000)
 
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
         

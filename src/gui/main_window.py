@@ -9,26 +9,6 @@ from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
 from src.core.api import ensure_future_data
 
-def check_and_ensure_tomorrow_data(city, country):
-    """Ensure prayer times for tomorrow are available in the database.
-    
-    Args:
-        city (str): City name to check data for
-        country (str): Country name to check data for
-        
-    Behavior:
-        1. Checks if tomorrow's prayer times exist in database
-        2. If not found, fetches next 30 days of prayer times via API
-        3. Prints status messages about the operation
-    """
-
-    tomorrow = datetime.datetime.now().date() + timedelta(days=1)
-    # Check if prayer times for tomorrow exist in DB
-    data = get_prayer_times_from_db(tomorrow, city)
-    if data is None:
-        print(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
-        # Prefetch next 30 days
-        ensure_future_data(city=city, country=country, days=30)
 class MainWindow(tk.Tk):
     BG_COLOR = "#000000"
     PRIMARY_COLOR = "#006853"
@@ -53,6 +33,9 @@ class MainWindow(tk.Tk):
         self.configure(bg=self.BG_COLOR) 
         self.title("Prayer Times")
 
+        # Get current time
+        self.now = PrayerTimesFrame.now
+
         # Get screen width and height
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
@@ -64,7 +47,7 @@ class MainWindow(tk.Tk):
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
 
-        check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
+        self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
         # Menu bar using PrayerMenu
         self.menu = PrayerMenu(
             self,
@@ -97,7 +80,7 @@ class MainWindow(tk.Tk):
         )
         # Analog clock
         self.analog_clock.grid(row=0, column=0, rowspan=2, padx=(0, 20), sticky="nw")
-        self.update_analog_clock()
+        
 
         # --- Clock frame to stack digital clock and both dates vertically ---
         self.clock_frame = tk.Frame(self.top_frame, bg=self.BG_COLOR)
@@ -113,7 +96,7 @@ class MainWindow(tk.Tk):
         )
         # Digital clock
         self.clock_label.grid(row=0, column=0, sticky="nw", pady=(0, 0))
-        self.update_clock()
+        
         # Gregorian and Hijri dates in a sub-frame
         self.date_frame = tk.Frame(self.top_frame, bg=self.BG_COLOR)
         self.date_frame.grid(row=1, column=1, sticky="ne")
@@ -147,7 +130,30 @@ class MainWindow(tk.Tk):
             location={"city": self.city_var.get(), "country": self.country_var.get()}
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
+        
+        self.update_analog_clock()
+        self.update_clock()
         self.schedule_midnight_update()
+    def check_and_ensure_tomorrow_data(self, city, country):
+        """Ensure prayer times for tomorrow are available in the database.
+        
+        Args:
+            city (str): City name to check data for
+            country (str): Country name to check data for
+            
+        Behavior:
+            1. Checks if tomorrow's prayer times exist in database
+            2. If not found, fetches next 30 days of prayer times via API
+            3. Prints status messages about the operation
+        """
+
+        tomorrow = datetime.datetime.now().date() + timedelta(days=1)
+        # Check if prayer times for tomorrow exist in DB
+        data = get_prayer_times_from_db(tomorrow, city)
+        if data is None:
+            print(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
+            # Prefetch next 30 days
+            ensure_future_data(city=city, country=country, days=30)
     def update_analog_clock(self):
         """Draw analog clock hands and update every second."""
         self.analog_clock.delete("all")
@@ -167,10 +173,10 @@ class MainWindow(tk.Tk):
             y_end = center - radius * 0.95 * math.cos(angle)
             self.analog_clock.create_line(x_start, y_start, x_end, y_end, fill=self.PRIMARY_COLOR, width=2)
 
-        now = datetime.datetime.now()
-        hour = now.hour % 12
-        minute = now.minute
-        second = now.second
+ 
+        hour = self.now.hour % 12
+        minute = self.now.minute
+        second = self.now.second
 
         # Angles
         hour_angle = math.radians((hour + minute / 60) * 30)
@@ -274,22 +280,24 @@ class MainWindow(tk.Tk):
         self.prayer_frame.update_times()
     def update_clock(self):
         """Update the clock label every second with AM/PM format."""
-        now = datetime.datetime.now()
+        #self.now = datetime.datetime.now()
+        # For testing future time
+        #self.now = datetime.datetime.now() + timedelta(hours=15) + timedelta(minutes=1)
+        self.now = PrayerTimesFrame.now
         # 12-hour format with AM/PM
-        self.clock_label.config(text=now.strftime("%I:%M %p"))
+        self.clock_label.config(text=self.now.strftime("%I:%M %p"))
 
         # Midnight reset check (no exact time dependency)
-        if now.date() != self.last_date:
+        if self.now.date() != self.last_date:
             self.schedule_midnight_update()
-            self.last_date = now.date()
+            self.last_date = self.now.date()
 
         self.after(1000, self.update_clock)
     def schedule_midnight_update(self):
         """Schedule prayer times update at midnight every day."""
-        now = datetime.datetime.now()
-        tomorrow = now + datetime.timedelta(days=1)
+        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
         midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
-        ms_until_midnight = int((midnight - now).total_seconds() * 1000)
+        ms_until_midnight = int((midnight - self.now).total_seconds() * 1000)
         self.after(ms_until_midnight, self.midnight_update)
         self.update_hijri_date_from_db()  # Update Hijri date at startup 
     def midnight_update(self):
@@ -300,7 +308,7 @@ class MainWindow(tk.Tk):
             self.last_date = today
             
             # Force refresh all data
-            check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
+            self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
             self.prayer_frame.update_times()
             self.update_hijri_date_from_db()
             self.prayer_frame.reset_alerts()
