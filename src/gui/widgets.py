@@ -221,8 +221,9 @@ class PrayerTimesFrame(tk.Frame):
         """
         #now = now + datetime.timedelta(minutes=30)
         now = datetime.datetime.now()
-        seconds_until = None 
+        seconds_until = None
         next_prayer_to_alert = None
+        min_delta = None 
 
         for prayer, time_str in self.current_times.items():
             try:
