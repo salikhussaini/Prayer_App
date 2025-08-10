@@ -294,13 +294,20 @@ class MainWindow(tk.Tk):
         self.update_hijri_date_from_db()  # Update Hijri date at startup 
     def midnight_update(self):
         """Update prayer times for the new day and reschedule for next midnight."""
-        self.prayer_frame.date = datetime.date.today()
-        # Ensure tomorrow's data is available
-        check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
-        
-        # Update prayer times for today
-        self.prayer_frame.update_times()
-        # Update Hijri date
-        self.update_hijri_date_from_db()
-        # Schedule daily prayer time update at midnight
-        self.schedule_midnight_update()
+        try:
+            today = datetime.date.today()
+            self.prayer_frame.date = today
+            self.last_date = today
+            
+            # Force refresh all data
+            check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
+            self.prayer_frame.update_times()
+            self.update_hijri_date_from_db()
+            self.prayer_frame.reset_alerts()
+            
+            # Reschedule with fresh calculation
+            self.schedule_midnight_update()
+        except Exception as e:
+            print(f"Midnight update failed: {e}")
+            # Retry in 5 minutes
+            self.after(300000, self.midnight_update)
