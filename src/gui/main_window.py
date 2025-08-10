@@ -237,6 +237,11 @@ class MainWindow(tk.Tk):
     def midnight_update(self):
         """Update prayer times for the new day and reschedule for next midnight."""
         self.prayer_frame.date = datetime.date.today()
+        # Ensure tomorrow's data is available
+        self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
+        # Update prayer times for today
         self.prayer_frame.update_times()
+        # Update Hijri date
+        self.update_hijri_date_from_db()
         # Schedule daily prayer time update at midnight
         self.schedule_midnight_update()

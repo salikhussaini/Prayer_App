@@ -51,7 +51,8 @@ class PrayerTimesFrame(tk.Frame):
 
         # Start prayer alert checking loop in background
         self.check_prayer_alerts()
-
+        # Reset prayer times at midnight
+        self.schedule_midnight_reset() 
 
         self.pack_propagate(False)
         self.configure(padx=10, pady=10)
@@ -218,9 +219,9 @@ class PrayerTimesFrame(tk.Frame):
 
         Alerts once when prayer time is within 60 seconds and prevents duplicate alerts.
         """
-        now = datetime.datetime.now()
         #now = now + datetime.timedelta(minutes=30)
-        min_delta = None
+        now = datetime.datetime.now()
+        seconds_until = None 
         next_prayer_to_alert = None
 
         for prayer, time_str in self.current_times.items():
@@ -235,6 +236,7 @@ class PrayerTimesFrame(tk.Frame):
                 # Determine if this is the soonest upcoming prayer
                 delta = prayer_time - now
                 seconds_until = delta.total_seconds()
+                next_prayer_to_alert = prayer
                 
                 # Update the minimum delta if this is the first future prayer found,
                 # or if this prayer occurs sooner than the current next prayer candidate
@@ -254,9 +256,19 @@ class PrayerTimesFrame(tk.Frame):
             except ValueError as e:
                 print(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
+        # Schedule next check based on how soon the next prayer is
+        if seconds_until is not None:
+            if seconds_until < 60:
+                self.after(10000, self.check_prayer_alerts)   # check every 10 sec
+            elif seconds_until < 3600:
+                self.after(60000, self.check_prayer_alerts)   # check every 1 min
+            else:
+                self.after(600000, self.check_prayer_alerts)  # check every 10 min
+        else:
+            # No prayers left today — check again in 10 minutes
+            self.after(600000, self.check_prayer_alerts)
+        
 
-        # Re-check after 1 minute
-        self.after(60000, self.check_prayer_alerts)
     def alert_user(self, prayer):
         """
         Play Athan sound when it's time for a prayer.
@@ -281,3 +293,40 @@ class PrayerTimesFrame(tk.Frame):
                 threading.Thread(target=play_fajr_athan, daemon=True).start()
             else: 
                 threading.Thread(target=play_athan, daemon=True).start()
+    
+    def schedule_midnight_reset(self):
+        """Schedules the prayer alerts reset to run exactly at midnight every day."""
+        now = datetime.datetime.now()
+
+        # Calculate next midnight (start of the next day)
+        tomorrow = now + datetime.timedelta(days=1)
+        next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
+
+        # Time until midnight in milliseconds
+        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
+
+        # Schedule first reset at midnight
+        self.after(ms_until_midnight, self._midnight_reset_wrapper)
+
+    def _midnight_reset_wrapper(self):
+        """Wrapper to reset alerts and reschedule next midnight reset."""
+        self.reset_alerts()
+        self.update_times()        # refresh prayer times for new day
+        self.update_next_prayer()  # refresh next prayer countdown
+
+        # Always recalculate next midnight to prevent drift
+        now = datetime.datetime.now()
+        tomorrow = now + datetime.timedelta(days=1)
+        next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
+        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
+
+        self.after(ms_until_midnight, self._midnight_reset_wrapper)
+        
+    def reset_alerts(self):
+        """Clear alerted prayers set at midnight and refresh times."""
+        self.alerted_prayers.clear()
+        self.date = datetime.date.today()  # update to new day
+        self.update_times()                # refresh prayer times
+        self.update_next_prayer()           # restart countdown
+        self.check_prayer_alerts()          # restart alert checks
+        print(f"[{datetime.datetime.now()}] Prayer alerts reset for new day.")
