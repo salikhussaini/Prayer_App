@@ -32,7 +32,7 @@ COUNTRY_CITIES = {
 
 class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
-    now = datetime.datetime.now()
+    now = datetime.datetime.now() + timedelta(minutes=52)
     now = now
     
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
@@ -91,7 +91,7 @@ class PrayerTimesFrame(tk.Frame):
         """Update the clock label every second with AM/PM format."""
         #PrayerTimesFrame.now = datetime.datetime.now()
         # For testing future time
-        PrayerTimesFrame.now = datetime.datetime.now()
+        PrayerTimesFrame.now = datetime.datetime.now() + timedelta(minutes=52)
         self.now = PrayerTimesFrame.now
         self.after(1000, self.update_clock)
 
@@ -329,10 +329,8 @@ class PrayerTimesFrame(tk.Frame):
                 self.after(66000, self.check_prayer_alerts)    # check every 66 sec
             elif min_delta < 600:
                 self.after(120000, self.check_prayer_alerts)   # check every 2 minutes
-
-        else:
-            # No prayers left today — check again in 10 minutes
-            self.after(600000, self.check_prayer_alerts) # check every 10 min
+        # No prayers left today — check again in 10 minutes
+        self.after(600000, self.check_prayer_alerts) # check every 10 min
         
 
     def alert_user(self, prayer):
