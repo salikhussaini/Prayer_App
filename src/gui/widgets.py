@@ -32,7 +32,7 @@ COUNTRY_CITIES = {
 
 class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
-    now = datetime.datetime.now() + timedelta(minutes=52)
+    now = datetime.datetime.now() 
     now = now
     
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
@@ -91,7 +91,7 @@ class PrayerTimesFrame(tk.Frame):
         """Update the clock label every second with AM/PM format."""
         #PrayerTimesFrame.now = datetime.datetime.now()
         # For testing future time
-        PrayerTimesFrame.now = datetime.datetime.now() + timedelta(minutes=52)
+        PrayerTimesFrame.now = datetime.datetime.now() 
         self.now = PrayerTimesFrame.now
         self.after(1000, self.update_clock)
 
