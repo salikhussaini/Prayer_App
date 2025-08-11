@@ -315,23 +315,41 @@ class PrayerTimesFrame(tk.Frame):
         print(f"Next prayer to alert: {next_prayer_to_alert} in {min_delta} seconds.")
         # Schedule next check based on how soon the next prayer is
         if min_delta is not None:
+            # 15 Seconds or less - check every 5 seconds
             if min_delta < 15:
                 self.after(5000, self.check_prayer_alerts)    # check every 5 sec
+            # 1 Minute or less - check every 10 seconds
             elif min_delta < 60:
                 self.after(10000, self.check_prayer_alerts)    # check every 10 sec
+            # 1.15 Minutes or less - check every 20 seconds
             elif min_delta < 75:
                 self.after(20000, self.check_prayer_alerts)    # check every 20 sec
+            # 2 Minutes or less - check every 30 seconds
             elif min_delta < 120:
                 self.after(30000, self.check_prayer_alerts)    # check every 30 sec
+            # 4 Minutes or less - check every 60 seconds
             elif min_delta < 240:
                 self.after(60000, self.check_prayer_alerts)    # check every 60 sec
+            # 6 Minutes or less - check every 66 seconds
             elif min_delta < 360:
                 self.after(66000, self.check_prayer_alerts)    # check every 66 sec
+            # 10 Minutes or less - check every 2 minutes
             elif min_delta < 600:
                 self.after(120000, self.check_prayer_alerts)   # check every 2 minutes
-        # No prayers left today — check again in 10 minutes
-        self.after(600000, self.check_prayer_alerts) # check every 10 min
-        
+            # 15 Minutes or less - check every 5 minutes
+            elif min_delta < (60 * 15):
+                self.after(300000, self.check_prayer_alerts)   # check every 5 minutes
+            # 20 Minutes or less - check every 5 minutes
+            elif min_delta < (60 * 20):
+                self.after(600000, self.check_prayer_alerts)   # check every 10 minutes
+            # 30 Minutes or less - check every 15 minutes
+            elif min_delta < (60 * 30):
+                self.after(60000 * 15, self.check_prayer_alerts)   # check every 15 min
+            else:
+                self.after(60000 * 20, self.check_prayer_alerts) # check every 20 min
+        else:
+            self.after(60000 * 60, self.check_prayer_alerts) # check every hour if no upcoming prayers found
+
 
     def alert_user(self, prayer):
         def play_athan(path):
