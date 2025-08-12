@@ -323,8 +323,8 @@ class PrayerTimesFrame(tk.Frame):
             (600, 120000), # Check every 2 minutes if within 10 minutes
             (900, 300000), # Check every 5 minutes if within 15 minutes
             (1200, 600000), # Check every 10 minutes if within 20 minutes
-            (1800, 900000) # Check every 15 minutes if within 30 minutes
-            (3600, 1200000) # Check every 20 minutes if within 1 hour
+            (1800, 900000), # Check every 15 minutes if within 30 minutes
+            (3600, 1200000), # Check every 20 minutes if within 1 hour
             (7200, 2400000) # Check every 40 minutes if within 2 hours
 
         ]
