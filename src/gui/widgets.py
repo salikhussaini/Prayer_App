@@ -322,10 +322,10 @@ class PrayerTimesFrame(tk.Frame):
             (240, 60000), # Check every 1 minute if within 4 minutes
             (600, 120000), # Check every 2 minutes if within 10 minutes
             (900, 300000), # Check every 5 minutes if within 15 minutes
-            (1200, 60000 * 10), # Check every 10 minutes if within 20 minutes
-            (1800, 60000 * 15) # Check every 15 minutes if within 30 minutes
-            (3600, 60000 * 20) # Check every 20 minutes if within 1 hour
-            (3600 * 2, 60000 * 40) # Check every 40 minutes if within 2 hours
+            (1200, 600000), # Check every 10 minutes if within 20 minutes
+            (1800, 900000) # Check every 15 minutes if within 30 minutes
+            (3600, 1200000) # Check every 20 minutes if within 1 hour
+            (7200, 2400000) # Check every 40 minutes if within 2 hours
 
         ]
 
@@ -334,7 +334,7 @@ class PrayerTimesFrame(tk.Frame):
                 self.after(interval, self.check_prayer_alerts)
                 break
         else:
-            self.after(1800 * 12, self.check_prayer_alerts) # Check every 2 hours if more than 6 hours away
+            self.after(21600, self.check_prayer_alerts) # Check every 2 hours if more than 6 hours away
 
     def alert_user(self, prayer):
         def play_athan(path):
