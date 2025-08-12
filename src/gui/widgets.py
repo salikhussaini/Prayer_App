@@ -329,13 +329,16 @@ class PrayerTimesFrame(tk.Frame):
 
         ]
 
-        for limit, interval in CHECK_INTERVALS:
-            if min_delta < limit:
-                self.after(interval, self.check_prayer_alerts)
-                break
-        else:
-            self.after(21600, self.check_prayer_alerts) # Check every 2 hours if more than 6 hours away
-
+        try:
+            for limit, interval in CHECK_INTERVALS:
+                if min_delta < limit:
+                    self.after(interval, self.check_prayer_alerts)
+                    break
+            else:
+                self.after(6000000, self.check_prayer_alerts) # Default to 1 hour checks if no prayer is imminent
+        except Exception as e:
+            print(f"Error scheduling prayer alert checks: {e}")
+            self.after(12000000, self.check_prayer_alerts) # Fallback to 2 hour checks on error
     def alert_user(self, prayer):
         def play_athan(path):
             try:
