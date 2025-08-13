@@ -1,4 +1,5 @@
 import tkinter as tk
+import time
 import datetime
 from src.core.calculations import calculate_prayer_times
 import threading
@@ -32,8 +33,9 @@ COUNTRY_CITIES = {
 
 class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+    # For testing future time
+    # now = datetime.datetime.now() + datetime.timedelta(minutes=1)
     now = datetime.datetime.now() 
-    now = now
     
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
     def __init__(self, master=None, date=None, location=None):
@@ -89,9 +91,9 @@ class PrayerTimesFrame(tk.Frame):
         
     def update_clock(self):
         """Update the clock label every second with AM/PM format."""
-        #PrayerTimesFrame.now = datetime.datetime.now()
         # For testing future time
-        PrayerTimesFrame.now = datetime.datetime.now() 
+        # PrayerTimesFrame.now = datetime.datetime.now() + datetime.timedelta(minutes=1)
+        PrayerTimesFrame.now = datetime.datetime.now()
         self.now = PrayerTimesFrame.now
         self.after(1000, self.update_clock)
 
@@ -340,20 +342,32 @@ class PrayerTimesFrame(tk.Frame):
             print(f"Error scheduling prayer alert checks: {e}")
             self.after(12000000, self.check_prayer_alerts) # Fallback to 2 hour checks on error
     def alert_user(self, prayer):
-        def play_athan(path):
+        def play_with_wait(path):
             try:
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play()
+                while pygame.mixer.music.get_busy():  # Wait until finished
+                    pygame.time.Clock().tick(10)
             except Exception as e:
-                print(f"Error playing Athan for {prayer}: {e}")
+                print(f"Error playing {path} for {prayer}: {e}")
+
+        def play_sequence(first_path, second_path):
+            play_with_wait(first_path)
+            play_with_wait(second_path)
 
         if prayer in self.PRAYERS:
+            dua_path = os.path.join("src", "assets", "dua.wav")
             if prayer == "Fajr":
                 athan_path = os.path.join("src", "assets", "fajr_athan.wav")
             else:
                 athan_path = os.path.join("src", "assets", "athan.wav")
 
-            threading.Thread(target=play_athan, args=(athan_path,), daemon=True).start()
+            threading.Thread(
+                target=play_sequence,
+                args=(athan_path, dua_path),
+                daemon=True
+            ).start()
+            
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight.
     
