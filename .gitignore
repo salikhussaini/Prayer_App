@@ -1,1 +1,88 @@
-prayer_times.db
+# -------------------------
+# Python bytecode / cache
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# -------------------------
+# Virtual environments
+# -------------------------
+.env/
+.venv/
+venv/
+env/
+
+# -------------------------
+# Distribution / packaging
+# -------------------------
+build/
+dist/
+*.egg-info/
+*.egg
+
+# -------------------------
+# Logs / runtime files
+# -------------------------
+*.log
+*.pot
+*.pkl
+*.db-journal
+*.db
+*.sqlite
+*.sqlite3
+
+# -------------------------
+# Test / coverage
+# -------------------------
+.coverage
+coverage.xml
+.cache/
+.pytest_cache/
+htmlcov/
+
+# -------------------------
+# Editors / IDEs
+# -------------------------
+# VS Code
+.vscode/
+.settings/
+
+# PyCharm / JetBrains
+.idea/
+
+# Other editors
+*.swp
+*.swo
+*~
+
+# -------------------------
+# OS-specific
+# -------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# -------------------------
+# Jupyter / notebooks
+# -------------------------
+*.ipynb_checkpoints/
+
+# -------------------------
+# Generated documentation
+# -------------------------
+docs/_build/
+
+# -------------------------
+# Environment / config files
+# -------------------------
+*.env
+.env.local
+.env.*.local
