@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.ttk as ttk
 import math
 import datetime
 from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
@@ -27,6 +28,7 @@ class MainWindow(tk.Tk):
         - Prayer times frame
         - Automatic midnight updates
         """
+
         super().__init__()
         init_db()  # Ensure DB and table are created before anything else
         # Set background color to black
@@ -86,43 +88,23 @@ class MainWindow(tk.Tk):
         self.clock_frame = tk.Frame(self.top_frame, bg=self.BG_COLOR)
         self.clock_frame.grid(row=0, column=1, sticky="n")
 
+        self.configure_styles()
         # --- Digital clock (top right of analog) ---
-        self.clock_label = tk.Label(
-            self.clock_frame,
-            text="",
-            font=("Arial", 85, "bold"),
-            bg=self.BG_COLOR,
-            fg=self.PRIMARY_COLOR
-        )
-        # Digital clock
+        self.clock_label = ttk.Label(self.clock_frame, text="", style="Clock.TLabel")
         self.clock_label.grid(row=0, column=0, sticky="nw", pady=(0, 0))
-        
+
         # Gregorian and Hijri dates in a sub-frame
         self.date_frame = tk.Frame(self.top_frame, bg=self.BG_COLOR)
         self.date_frame.grid(row=1, column=1, sticky="ne")
+        
         # --- Gregorian date (below digital clock) ---
-        self.gregorian_label = tk.Label(
-            self.date_frame,
-            text="",
-            font=("Arial", 28),
-            bg=self.BG_COLOR,
-            fg=self.PRIMARY_COLOR,
-            anchor="e",
-            justify="right"
-        )
+        self.gregorian_label = ttk.Label(self.date_frame, text="", style="Date.TLabel")
         self.gregorian_label.pack(fill="x", anchor="e")
 
         # --- Hijri date (below Gregorian date) ---
-        self.hijri_label = tk.Label(
-            self.date_frame,
-            text="",
-            font=("Arial", 28),
-            bg=self.BG_COLOR,
-            fg=self.PRIMARY_COLOR,
-            anchor="e",
-            justify="right"
-        )
+        self.hijri_label = ttk.Label(self.date_frame, text="", style="Date.TLabel")
         self.hijri_label.pack(fill="x", anchor="e")
+        
         # Prayer frame
         self.prayer_frame = PrayerTimesFrame(
             self,
@@ -134,6 +116,12 @@ class MainWindow(tk.Tk):
         self.update_analog_clock()
         self.update_clock()
         self.schedule_midnight_update()
+    def configure_styles(self):
+        style = ttk.Style()
+        style.configure("TLabel", font=("Segoe UI", 20), background=self.BG_COLOR, foreground=self.PRIMARY_COLOR, anchor="e", justify="right")
+        style.configure("Clock.TLabel", font=("Segoe UI", 85, "bold"), foreground=self.PRIMARY_COLOR, background=self.BG_COLOR, anchor="e", justify="right")
+        style.configure("Date.TLabel", font=("Segoe UI", 40), foreground=self.PRIMARY_COLOR, background=self.BG_COLOR, anchor="e", justify="right")
+
     def check_and_ensure_tomorrow_data(self, city, country):
         """Ensure prayer times for tomorrow are available in the database.
         
