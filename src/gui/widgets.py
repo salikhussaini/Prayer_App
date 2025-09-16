@@ -47,9 +47,14 @@ class PrayerTimesFrame(tk.Frame):
         self.labels = {}
         self.alerted_prayers = set()
         self.current_times = {}
-        self.next_prayer_label = tk.Label(self, text="", font=("Arial", 24, "bold"), fg="#006853", bg="#000000")
-
-        self.next_prayer_label.grid(row=1, column=0, columnspan=5)
+        self.next_prayer_label = tk.Label(
+            self, 
+            text="", 
+            font=("Segoe UI", 32, "bold"), 
+            fg="#540000", bg="#000000", 
+            pady=15
+        )
+        self.next_prayer_label.grid(row=0, column=0, columnspan=5, pady=(10, 20))
         for col in range(5):
             self.grid_columnconfigure(col, weight=1)
 
@@ -76,18 +81,37 @@ class PrayerTimesFrame(tk.Frame):
         - Time display label
         - Stores references in self.labels dictionary
         """
-        prayers = self.PRAYERS
-        for idx, prayer in enumerate(prayers):
-            frame = tk.Frame(self, bd=3, relief="ridge", bg="#000000", padx=5, pady=5)
-            frame.grid(row=2, column=idx, padx=5, pady=20, sticky="nsew")
+        self.prayer_frames = {}
+        accent_color = "#006853" 
+        text_color = "#006853"
+        card_bg = "#000000"
 
-            lbl_prayer = tk.Label(frame, text=prayer, font=("Arial", 25, "bold"), bg="#000000", fg="#006853")
-            lbl_prayer.pack(padx=5, pady=(10, 5))
+        for idx, prayer in enumerate(self.PRAYERS):
+            frame = tk.Frame(
+                self, 
+                bg=card_bg, 
+                highlightbackground=accent_color, 
+                highlightthickness=2, 
+                padx=10, pady=10
+            )
+            frame.grid(row=2, column=idx, padx=10, pady=20, sticky="nsew")
 
-            lbl_time = tk.Label(frame, text="--:--", font=("Arial", 28), bg="#000000", fg="#006853")
-            lbl_time.pack(padx=5, pady=(5, 10))
+            lbl_prayer = tk.Label(
+                frame, text=prayer, 
+                font=("Segoe UI", 18, "bold"), 
+                bg=card_bg, fg=text_color
+            )
+            lbl_prayer.pack(padx=5, pady=(5, 2))
+
+            lbl_time = tk.Label(
+                frame, text="--:--", 
+                font=("Segoe UI", 33), 
+                bg=card_bg, fg=accent_color
+            )
+            lbl_time.pack(padx=5, pady=(2, 5))
 
             self.labels[prayer] = lbl_time
+            self.prayer_frames[prayer] = frame
         
     def update_clock(self):
         """Update the clock label every second with AM/PM format."""
@@ -160,6 +184,15 @@ class PrayerTimesFrame(tk.Frame):
         minutes, _ = divmod(remainder, 60)
         return hours, minutes
 
+    def highlight_next_prayer(self, next_prayer):
+        """Highlight the card for the next prayer."""
+        for prayer, frame in self.prayer_frames.items():
+            if prayer == next_prayer:
+                frame.config(highlightbackground="#FFD700", highlightthickness=4)  # gold border
+            else:
+                frame.config(highlightbackground="#00FF99", highlightthickness=2)
+
+
     def update_next_prayer(self):
         """
         Calculate and display the time remaining until the next prayer.
@@ -219,7 +252,8 @@ class PrayerTimesFrame(tk.Frame):
                     text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
                 )
                 self.after(60000, self.update_next_prayer)
-            return
+            self.highlight_next_prayer(next_prayer)
+            return        
 
         # If all prayers today have passed, calculate time until tomorrow's Fajr
         try:
