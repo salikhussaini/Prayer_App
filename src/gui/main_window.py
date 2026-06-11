@@ -11,7 +11,7 @@ from src.gui.dialogs import SettingsDialog
 from src.core.db import init_db
 from src.core.api import PrayerAPIException
 from src.core.logger_config import setup_logging, get_logger
-from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL
+from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL, FONT_SIZES, DEFAULT_FONT_SIZE
 
 from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
@@ -65,6 +65,7 @@ class MainWindow(tk.Tk):
 
         self.api_method = API_METHOD
         self.api_school = API_SCHOOL
+        self.font_size = DEFAULT_FONT_SIZE
 
         self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
         # Menu bar using PrayerMenu
@@ -291,19 +292,58 @@ class MainWindow(tk.Tk):
         self.update_prayer_frame_location()
 
     def open_settings(self):
-        """Open the settings dialog and update API parameters."""
-        dialog = SettingsDialog(self, "API Settings", self.api_method, self.api_school)
+        """Open the settings dialog and update API parameters and font size."""
+        dialog = SettingsDialog(self, "Settings", self.api_method, self.api_school, self.font_size)
         if dialog.result:
-            self.api_method = dialog.result["method"]
-            self.api_school = dialog.result["school"]
+            try:
+                self.api_method = dialog.result["method"]
+                self.api_school = dialog.result["school"]
+                self.font_size = dialog.result["font_size"]
+                
+                # Update global config for other modules
+                import src.core.config as config
+                config.API_METHOD = self.api_method
+                config.API_SCHOOL = self.api_school
+                
+                logger.info(f"Settings updated: Method={self.api_method}, School={self.api_school}, Font Size={self.font_size}")
+                self.apply_font_sizes()
+                self.refresh_prayer_times()
+            except Exception as e:
+                logger.error(f"Error applying settings: {e}", exc_info=True)
+        else:
+            logger.debug("Settings dialog was cancelled")
+    
+    def apply_font_sizes(self):
+        """Apply selected font size to all UI elements."""
+        try:
+            if self.font_size not in FONT_SIZES:
+                logger.error(f"Invalid font size: {self.font_size}. Available: {list(FONT_SIZES.keys())}")
+                return
             
-            # Update global config for other modules
-            import src.core.config as config
-            config.API_METHOD = self.api_method
-            config.API_SCHOOL = self.api_school
+            sizes = FONT_SIZES[self.font_size]
+            logger.debug(f"Applying font size '{self.font_size}': {sizes}")
             
-            logger.info(f"API Settings updated: Method={self.api_method}, School={self.api_school}")
-            self.refresh_prayer_times()
+            # Update clock label font
+            self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
+            
+            # Update date labels
+            self.gregorian_label.config(font=("Segoe UI", sizes["date"]))
+            self.hijri_label.config(font=("Segoe UI", sizes["date"]))
+            
+            # Update next prayer label
+            self.prayer_frame.next_prayer_label.config(font=("Segoe UI", sizes["next_prayer"], "bold"))
+            
+            # Update prayer cards
+            for prayer in self.prayer_frame.PRAYERS:
+                prayer_name_label = self.prayer_frame.prayer_frames[prayer].winfo_children()[0]
+                prayer_time_label = self.prayer_frame.labels[prayer]
+                
+                prayer_name_label.config(font=("Segoe UI", sizes["prayer_name"], "bold"))
+                prayer_time_label.config(font=("Segoe UI", sizes["prayer_time"]))
+            
+            logger.info(f"Font sizes applied: {self.font_size}")
+        except Exception as e:
+            logger.error(f"Error applying font sizes: {e}", exc_info=True)
 
     def update_prayer_frame_location(self):
         """Update the prayer times display with new location data.

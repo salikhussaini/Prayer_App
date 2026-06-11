@@ -68,3 +68,28 @@ NameError: name 'API_METHOD' is not defined
 2026-06-10 22:38:53 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
 2026-06-10 22:40:52 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
 2026-06-10 22:43:13 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:56:07 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:56:18 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=clock_digital
+2026-06-10 22:56:28 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=menu
+2026-06-10 22:57:58 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:58:01 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:58:16 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=menu
+2026-06-10 22:58:16 - src.gui.main_window - ERROR - Error applying font sizes: tuple indices must be integers or slices, not str
+Traceback (most recent call last):
+  File "C:\Users\salik\Documents\PROJECTS\Prayer_App\src\gui\main_window.py", line 327, in apply_font_sizes
+    self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
+                                              ~~~~~^^^^^^^^^
+TypeError: tuple indices must be integers or slices, not str
+2026-06-10 22:58:26 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=clock_digital
+2026-06-10 22:58:26 - src.gui.main_window - ERROR - Error applying font sizes: tuple indices must be integers or slices, not str
+Traceback (most recent call last):
+  File "C:\Users\salik\Documents\PROJECTS\Prayer_App\src\gui\main_window.py", line 327, in apply_font_sizes
+    self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
+                                              ~~~~~^^^^^^^^^
+TypeError: tuple indices must be integers or slices, not str
+2026-06-10 22:59:38 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:59:51 - root - INFO - Logging initialized. Log files stored in: C:\Users\salik\Documents\PROJECTS\Prayer_App\logs
+2026-06-10 22:59:57 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=Large
+2026-06-10 22:59:57 - src.gui.main_window - INFO - Font sizes applied: Large
+2026-06-10 23:00:04 - src.gui.main_window - INFO - Settings updated: Method=2, School=1, Font Size=Small
+2026-06-10 23:00:04 - src.gui.main_window - INFO - Font sizes applied: Small

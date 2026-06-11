@@ -92,6 +92,16 @@ DEFAULT_COUNTRY = "USA"
 DEFAULT_CITY = "Chicago"
 
 # ====================
+# UI CONFIGURATION
+# ====================
+FONT_SIZES = {
+    "Small": {"clock": 60, "prayer_name": 14, "prayer_time": 28, "next_prayer": 24, "date": 30},
+    "Medium": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40},
+    "Large": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50},
+}
+DEFAULT_FONT_SIZE = "Medium"
+
+# ====================
 # UI COLORS
 # ====================
 class Colors:
@@ -129,14 +139,6 @@ AUTO_RESTART_DAYS = 7  # Automatically restart after this many days of uptime
 SCREEN_WIDTH_FRACTION = 3  # Analog clock width = screen_width / 3
 SCREEN_HEIGHT_FRACTION = 3  # Analog clock height = screen_height / 3
 MIN_CLOCK_SIZE = 300  # Minimum analog clock size in pixels
-FONT_SIZES = {
-    "clock_digital": ("Segoe UI", 85, "bold"),
-    "date": ("Segoe UI", 40),
-    "prayer_name": ("Segoe UI", 18, "bold"),
-    "prayer_time": ("Segoe UI", 33),
-    "next_prayer": ("Segoe UI", 32, "bold"),
-    "menu": ("Segoe UI", 20),
-}
 
 # ====================
 # AUDIO FILES
