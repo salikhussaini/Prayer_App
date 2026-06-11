@@ -24,13 +24,11 @@ dist/
 *.egg
 
 # -------------------------
-# Logs / runtime files
+# Data / Database files
 # -------------------------
-*.log
-*.pot
-*.pkl
-*.db-journal
+data/
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
 

@@ -2,10 +2,15 @@ import tkinter as tk
 import time
 import datetime
 from src.core.calculations import calculate_prayer_times
+from src.core.logger_config import get_logger
 import threading
 import pygame
 import os
 from datetime import timedelta
+
+# Setup logging
+logger = get_logger(__name__)
+
 
 # Define valid cities for each country
 COUNTRY_CITIES = {
@@ -153,7 +158,7 @@ class PrayerTimesFrame(tk.Frame):
             try:
                 times = calculate_prayer_times(self.date, self.location)
             except Exception as e:
-                print(f"Error calculating prayer times: {e}")
+                logger.error(f"Error calculating prayer times: {e}")
                 times = {}
         self.current_times = times
         for prayer in self.PRAYERS:
@@ -298,34 +303,37 @@ class PrayerTimesFrame(tk.Frame):
         Operation:
         1. Checks all upcoming prayer times
         2. Finds the next occurring prayer
-        3. Triggers audio alert when prayer time is within 60 seconds
+        3. Triggers audio alert when prayer time is within 30 seconds
         4. Prevents duplicate alerts using alerted_prayers set
         
         Scheduling:
         - Checks more frequently as prayer time approaches:
-        - Every 10 seconds when <60 seconds away
-        - Every minute when <1 hour away
-        - Every 10 minutes otherwise
+        - Every 5 seconds when <15 seconds away
+        - Every 10 seconds when <1 minute away
+        - Every 20 seconds when <1.25 minutes away
+        - Gradually increases intervals for distant prayers
         
         Note: Runs continuously via tkinter's after() scheduler.
         """
-        #now = now + datetime.timedelta(minutes=30)
-        #now = datetime.datetime.now()
         seconds_until = None
         next_prayer_to_alert = None
         min_delta = None 
 
-        for prayer, time_str in self.current_times.items():
+        # Only iterate through actual prayer times, skip other keys like 'hijri_date'
+        for prayer in self.PRAYERS:
+            time_str = self.current_times.get(prayer)
+            if not time_str:
+                continue
+                
             try:
                 # Convert string to today's datetime object
                 prayer_time = datetime.datetime.combine(PrayerTimesFrame.now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
                 
                 # Skip if this prayer has already passed
                 if prayer_time < PrayerTimesFrame.now:
-                    print(prayer, "has already passed.", prayer_time, "<", PrayerTimesFrame.now)
+                    logger.debug(f"{prayer} has already passed")
                     continue
                 
-
                 # Determine if this is the soonest upcoming prayer
                 delta = prayer_time - PrayerTimesFrame.now
                 seconds_until = delta.total_seconds()
@@ -333,59 +341,84 @@ class PrayerTimesFrame(tk.Frame):
                 # Update the minimum delta if this is the first future prayer found,
                 # or if this prayer occurs sooner than the current next prayer candidate
                 if (min_delta is None or delta < min_delta) and seconds_until > 0:
-                    #print(f"Checking prayer: {prayer} at {time_str}, delta: {delta}")
                     # Keep track of soonest upcoming prayer
                     min_delta = delta.total_seconds()
                     next_prayer_to_alert = prayer
                 
-                # Alert user if this prayer is within 1 minute
+                # Alert user if this prayer is within 30 seconds
                 seconds_until = delta.total_seconds()
                 if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
-            except Exception:
-                continue
             except ValueError as e:
-                print(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
+                logger.warning(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
-        print(f"Next prayer to alert: {next_prayer_to_alert} in {min_delta} seconds.")
+            except Exception as e:
+                logger.error(f"Unexpected error checking alerts for {prayer}: {e}")
+                continue
+        
+        logger.debug(f"Next prayer to alert: {next_prayer_to_alert} in {min_delta} seconds")
+        
         # Schedule next check based on how soon the next prayer is
         CHECK_INTERVALS = [
             (15, 5000),
-            (60, 10000), # Check every 10 seconds if within 1 minute
-            (75, 20000), # Check every 20 seconds if within 1.25 minutes
-            (120, 30000), # Check every 30 seconds if within 2 minutes
-            (240, 60000), # Check every 1 minute if within 4 minutes
-            (600, 120000), # Check every 2 minutes if within 10 minutes
-            (900, 300000), # Check every 5 minutes if within 15 minutes
+            (60, 10000),    # Check every 10 seconds if within 1 minute
+            (75, 20000),    # Check every 20 seconds if within 1.25 minutes
+            (120, 30000),   # Check every 30 seconds if within 2 minutes
+            (240, 60000),   # Check every 1 minute if within 4 minutes
+            (600, 120000),  # Check every 2 minutes if within 10 minutes
+            (900, 300000),  # Check every 5 minutes if within 15 minutes
             (1200, 600000), # Check every 10 minutes if within 20 minutes
             (1800, 900000), # Check every 15 minutes if within 30 minutes
             (3600, 1200000), # Check every 20 minutes if within 1 hour
             (7200, 2400000) # Check every 40 minutes if within 2 hours
-
         ]
 
         try:
-            for limit, interval in CHECK_INTERVALS:
-                if min_delta < limit:
-                    self.after(interval, self.check_prayer_alerts)
-                    break
+            if min_delta is not None:
+                for limit, interval in CHECK_INTERVALS:
+                    if min_delta < limit:
+                        self.after(interval, self.check_prayer_alerts)
+                        break
+                else:
+                    self.after(6000000, self.check_prayer_alerts)  # Default to 1 hour checks
             else:
-                self.after(6000000, self.check_prayer_alerts) # Default to 1 hour checks if no prayer is imminent
+                self.after(6000000, self.check_prayer_alerts)  # No prayer found, retry in 1 hour
         except Exception as e:
-            print(f"Error scheduling prayer alert checks: {e}")
-            self.after(12000000, self.check_prayer_alerts) # Fallback to 2 hour checks on error
+            logger.error(f"Error scheduling prayer alert checks: {e}")
+            self.after(12000000, self.check_prayer_alerts)  # Fallback to 2 hour checks on error
+
     def alert_user(self, prayer):
+        """Play alert sounds for prayer time notification.
+        
+        Args:
+            prayer (str): Prayer name (Fajr, Dhuhr, Asr, Maghrib, Isha)
+            
+        Behavior:
+        - Plays prayer-specific Athan (Fajr has unique call)
+        - Follows with Dua audio
+        - Handles missing files gracefully with logging
+        - Runs in background thread
+        """
         def play_with_wait(path):
+            """Load and play audio file, wait for completion."""
+            if not os.path.exists(path):
+                logger.warning(f"Audio file not found: {path}")
+                return
+            
             try:
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play()
                 while pygame.mixer.music.get_busy():  # Wait until finished
                     pygame.time.Clock().tick(10)
+                logger.debug(f"Successfully played: {path}")
+            except pygame.error as e:
+                logger.error(f"Pygame error playing {path}: {e}")
             except Exception as e:
-                print(f"Error playing {path} for {prayer}: {e}")
+                logger.error(f"Error playing audio {path}: {e}")
 
         def play_sequence(first_path, second_path):
+            """Play two audio files in sequence."""
             play_with_wait(first_path)
             play_with_wait(second_path)
 
@@ -396,11 +429,13 @@ class PrayerTimesFrame(tk.Frame):
             else:
                 athan_path = os.path.join("src", "assets", "athan.wav")
 
+            logger.info(f"Alert triggered for {prayer}")
             threading.Thread(
                 target=play_sequence,
                 args=(athan_path, dua_path),
                 daemon=True
             ).start()
+
             
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight.
@@ -456,4 +491,4 @@ class PrayerTimesFrame(tk.Frame):
         self.update_times()                # refresh prayer times
         self.update_next_prayer()           # restart countdown
         self.check_prayer_alerts()          # restart alert checks
-        print(f"[{datetime.datetime.now()}] Prayer alerts reset for new day.")
+        logger.info(f"Prayer alerts reset for new day ({datetime.date.today()})")

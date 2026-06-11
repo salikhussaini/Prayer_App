@@ -2,13 +2,24 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import math
 import datetime
+import logging
+import os
+import sys
 from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
 from src.gui.menu import PrayerMenu
 from src.core.db import init_db
+from src.core.api import PrayerAPIException
+from src.core.logger_config import setup_logging, get_logger
+from src.core.config import AUTO_RESTART_DAYS
 
 from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
 from src.core.api import ensure_future_data
+
+# Initialize logging system
+setup_logging(level=logging.INFO)
+logger = get_logger(__name__)
+
 
 class MainWindow(tk.Tk):
     BG_COLOR = "#000000"
@@ -31,6 +42,7 @@ class MainWindow(tk.Tk):
 
         super().__init__()
         init_db()  # Ensure DB and table are created before anything else
+        self._validate_assets()  # Check for required audio files
         # Set background color to black
         self.configure(bg=self.BG_COLOR) 
         self.title("Prayer Times")
@@ -45,6 +57,7 @@ class MainWindow(tk.Tk):
         # Set geometry to full screen size (e.g., "1920x1080")
         self.geometry(f"{screen_width}x{screen_height}+0+0")
 
+        self.start_time = datetime.datetime.now()
         self.last_date = datetime.datetime.now().date()
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
@@ -132,16 +145,39 @@ class MainWindow(tk.Tk):
         Behavior:
             1. Checks if tomorrow's prayer times exist in database
             2. If not found, fetches next 30 days of prayer times via API
-            3. Prints status messages about the operation
+            3. Logs status messages about the operation
         """
-
-        tomorrow = datetime.datetime.now().date() + timedelta(days=1)
-        # Check if prayer times for tomorrow exist in DB
-        data = get_prayer_times_from_db(tomorrow, city)
-        if data is None:
-            print(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
-            # Prefetch next 30 days
-            ensure_future_data(city=city, country=country, days=30)
+        try:
+            tomorrow = datetime.datetime.now().date() + timedelta(days=1)
+            # Check if prayer times for tomorrow exist in DB
+            data = get_prayer_times_from_db(tomorrow, city)
+            if data is None:
+                logger.info(f"No prayer times found for {city}, {country} on {tomorrow}. Fetching data...")
+                # Prefetch next 30 days
+                ensure_future_data(city=city, country=country, days=30)
+        except PrayerAPIException as e:
+            logger.error(f"Failed to ensure tomorrow's data: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error checking tomorrow's data: {e}", exc_info=True)
+    
+    def _validate_assets(self):
+        """Validate that required audio asset files exist.
+        
+        Checks for:
+        - src/assets/dua.wav
+        - src/assets/fajr_athan.wav
+        - src/assets/athan.wav
+        
+        Issues warnings if files are missing.
+        """
+        required_assets = [
+            "src/assets/dua.wav",
+            "src/assets/fajr_athan.wav", 
+            "src/assets/athan.wav"
+        ]
+        for asset in required_assets:
+            if not os.path.exists(asset):
+                logger.warning(f"Missing asset file: {asset}. Alerts may not play correctly.")
     def update_analog_clock(self):
         """Draw analog clock hands and update every second."""
         self.analog_clock.delete("all")
@@ -275,6 +311,14 @@ class MainWindow(tk.Tk):
         # 12-hour format with AM/PM
         self.clock_label.config(text=self.now.strftime("%I:%M %p"))
 
+        # Check for uptime-based auto-restart (e.g., every week)
+        uptime = datetime.datetime.now() - self.start_time
+        if uptime.days >= AUTO_RESTART_DAYS:
+            logger.info(f"Application has been running for {uptime.days} days. Restarting for maintenance...")
+            self.quit()
+            # main.py handles the actual restart logic if running in a loop/script
+            sys.exit(0)
+
         # Midnight reset check (no exact time dependency)
         if self.now.date() != self.last_date:
             self.schedule_midnight_update()
@@ -304,6 +348,6 @@ class MainWindow(tk.Tk):
             # Reschedule with fresh calculation
             self.schedule_midnight_update()
         except Exception as e:
-            print(f"Midnight update failed: {e}")
+            logger.error(f"Midnight update failed: {e}", exc_info=True)
             # Retry in 5 minutes
             self.after(300000, self.midnight_update)
