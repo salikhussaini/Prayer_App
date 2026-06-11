@@ -2,16 +2,7 @@ import sqlite3
 import os
 from pathlib import Path
 from contextlib import contextmanager
-
-# Get the project root (where main.py is located)
-# Navigate from src/core/db.py → src/core/ → src/ → project_root/
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-
-# Create data directory relative to main.py location
-DATA_DIR = PROJECT_ROOT / 'data'
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-DB_PATH = str(DATA_DIR / "prayer_times.db")
+from src.core.config import DB_PATH, DATA_DIR
 
 
 class DatabaseManager:
@@ -25,10 +16,15 @@ class DatabaseManager:
         return cls._instance
     
     def get_connection(self):
-        """Get or create database connection."""
+        """Get or create database connection.
+        
+        Uses centralized DB_PATH from config module to ensure consistency.
+        """
         if self._connection is None:
             self._connection = sqlite3.connect(DB_PATH, check_same_thread=False)
             self._connection.row_factory = sqlite3.Row
+            # Enable write-ahead logging for better concurrency
+            self._connection.execute('PRAGMA journal_mode=WAL')
         return self._connection
     
     @contextmanager
@@ -122,7 +118,16 @@ def get_prayer_times_from_db(date, city):
 
 
 def get_prayer_times_range_from_db(start_date, end_date, city):
-    """Retrieve prayer times for a date range and city."""
+    """Retrieve prayer times for a date range and city.
+    
+    Args:
+        start_date: datetime.date object (inclusive)
+        end_date: datetime.date object (inclusive)
+        city: City name for filtering
+        
+    Returns:
+        dict: {"YYYY-MM-DD": {"Prayer": "HH:MM", ...}, ...}
+    """
     try:
         with _db_manager.get_cursor() as cursor:
             cursor.execute('''
@@ -135,8 +140,15 @@ def get_prayer_times_range_from_db(start_date, end_date, city):
     except Exception as e:
         raise Exception(f"Failed to retrieve prayer times range for {city}: {e}")
 
-    return {row[0]: {
-        "Fajr": row[1], "Dhuhr": row[2], "Asr": row[3],
-        "Maghrib": row[4], "Isha": row[5]
-    } for row in rows}
+    result = {}
+    if rows:
+        for row in rows:
+            result[row[0]] = {
+                "Fajr": row[1],
+                "Dhuhr": row[2],
+                "Asr": row[3],
+                "Maghrib": row[4],
+                "Isha": row[5]
+            }
+    return result
 

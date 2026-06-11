@@ -1,11 +1,9 @@
 import requests
+import time
 from datetime import timedelta, datetime
 from src.core.db import store_prayer_times, get_prayer_times_range_from_db
 from src.core.logger_config import get_logger
-from src.core.config import (
-    API_URL_SINGLE, API_METHOD, API_SCHOOL, API_TIMEOUT, 
-    API_MAX_RETRIES, API_BACKOFF_BASE, PREFETCH_DAYS
-)
+import src.core.config as config
 import re
 import logging
 
@@ -89,19 +87,19 @@ def fetch_prayer_times_from_api(date, city, country="", max_retries=None):
         PrayerAPIRateLimit: API rate limit exceeded
     """
     if max_retries is None:
-        max_retries = API_MAX_RETRIES
+        max_retries = config.API_MAX_RETRIES
     
     params = {
         "city": city,
         "country": country,
-        "method": API_METHOD,
+        "method": config.API_METHOD,
         "date": date.strftime("%d-%m-%Y"),
-        "school": API_SCHOOL
+        "school": config.API_SCHOOL
     }
     
     for attempt in range(max_retries):
         try:
-            response = requests.get(API_URL_SINGLE, params=params, timeout=API_TIMEOUT)
+            response = requests.get(config.API_URL_SINGLE, params=params, timeout=config.API_TIMEOUT)
             
             # Handle rate limiting
             if response.status_code == 429:
@@ -133,14 +131,13 @@ def fetch_prayer_times_from_api(date, city, country="", max_retries=None):
         except requests.ConnectionError as e:
             logger.warning(f"Connection error (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                wait_time = API_BACKOFF_BASE ** attempt
-                import time
+                wait_time = config.API_BACKOFF_BASE ** attempt
                 time.sleep(wait_time)
             else:
                 raise PrayerAPIConnectionError(f"Failed to connect after {max_retries} attempts: {e}")
                 
         except requests.HTTPError as e:
-            if response.status_code == 429:
+            if e.response.status_code == 429:
                 raise PrayerAPIRateLimit(f"API rate limit exceeded: {e}")
             logger.error(f"HTTP error {e.response.status_code}: {e}")
             raise PrayerAPIResponseError(f"API HTTP error: {e}")
@@ -178,20 +175,19 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
         PrayerAPIConnectionError: Network/connection issues
         PrayerAPIResponseError: Invalid API response
     """
-    from src.core.config import API_URL_CALENDAR
-    url = f"{API_URL_CALENDAR}/from/{start_date.strftime('%d-%m-%Y')}/to/{end_date.strftime('%d-%m-%Y')}"
+    url = f"{config.API_URL_CALENDAR}/from/{start_date.strftime('%d-%m-%Y')}/to/{end_date.strftime('%d-%m-%Y')}"
     
     params = {
         "city": city,
         "country": country,
-        "method": API_METHOD,
-        "school": API_SCHOOL,
+        "method": config.API_METHOD,
+        "school": config.API_SCHOOL,
         "calendarMethod": "HJCoSA",
         "iso8601": "false",
     }
 
     try:
-        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        response = requests.get(url, params=params, timeout=config.API_TIMEOUT)
         
         if response.status_code == 429:
             raise PrayerAPIRateLimit("API rate limit exceeded")
@@ -250,19 +246,20 @@ def ensure_future_data(city, country="", days=None):
     Args:
         city: City name
         country: Country name
-        days: Number of days to prefetch (uses PREFETCH_DAYS if None)
+        days: Number of days to prefetch (uses config.PREFETCH_DAYS if None)
         
     Returns:
         bool: True if data is available, False otherwise
     """
     if days is None:
-        days = PREFETCH_DAYS
+        days = config.PREFETCH_DAYS
     
     today = datetime.now().date()
     end_date = today + timedelta(days=days)
 
     # Fetch existing data from DB
     existing = get_prayer_times_range_from_db(today, end_date, city)
+    logger.debug(f"Database check for {city}: Found {len(existing)} dates between {today} and {end_date}")
 
     # Check which dates are missing
     missing_dates = []
@@ -275,22 +272,29 @@ def ensure_future_data(city, country="", days=None):
         logger.info(f"All data present for {city} between {today} and {end_date}")
         return True
 
+    logger.info(f"Missing {len(missing_dates)} dates for {city}. Fetching from {missing_dates[0]} to {missing_dates[-1]}")
+    
     # Instead of fetching day-by-day, fetch all missing dates in one range if possible
     range_start = min(missing_dates)
     range_end = max(missing_dates)
     
     try:
         success = fetch_prayer_times_range(range_start, range_end, city, country)
+        if success:
+            logger.info(f"Successfully prefetched {len(missing_dates)} dates for {city}")
         return success
-    except PrayerAPIConnectionError:
-        logger.warning(f"Failed to fetch prayer times range, attempting individual fetches")
+    except PrayerAPIConnectionError as e:
+        logger.warning(f"Range fetch failed for {city}, falling back to individual fetches: {e}")
         # Fallback: fetch missing dates individually
+        successful_count = 0
         for date in missing_dates:
             try:
                 fetch_prayer_times_from_api(date, city, country)
+                successful_count += 1
             except PrayerAPIException as e:
-                logger.error(f"Failed to fetch prayer times for {date}, {city}: {e}")
-        return False
+                logger.error(f"Failed to fetch {date} for {city}: {e}")
+        logger.info(f"Prefetch fallback complete: {successful_count}/{len(missing_dates)} dates fetched")
+        return successful_count > 0
     except PrayerAPIRateLimit:
         logger.error(f"API rate limit exceeded while fetching data for {city}")
         return False

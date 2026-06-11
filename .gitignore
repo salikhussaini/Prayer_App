@@ -22,7 +22,12 @@ build/
 dist/
 *.egg-info/
 *.egg
-
+# -------------------------
+# Logs
+# all log files and log directories
+# -------------------------
+logs/
+*.log
 # -------------------------
 # Data / Database files
 # -------------------------

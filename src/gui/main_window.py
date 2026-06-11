@@ -7,10 +7,11 @@ import os
 import sys
 from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
 from src.gui.menu import PrayerMenu
+from src.gui.dialogs import SettingsDialog
 from src.core.db import init_db
 from src.core.api import PrayerAPIException
 from src.core.logger_config import setup_logging, get_logger
-from src.core.config import AUTO_RESTART_DAYS
+from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL
 
 from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
@@ -62,6 +63,9 @@ class MainWindow(tk.Tk):
         self.country_var = tk.StringVar(value="USA") # Default country
         self.city_var = tk.StringVar(value="Chicago") # Default city
 
+        self.api_method = API_METHOD
+        self.api_school = API_SCHOOL
+
         self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
         # Menu bar using PrayerMenu
         self.menu = PrayerMenu(
@@ -72,7 +76,8 @@ class MainWindow(tk.Tk):
             self.on_country_change_menu,
             self.update_prayer_frame_location,
             self.refresh_prayer_times,
-            self.quit
+            self.quit,
+            on_settings=self.open_settings
         )
 
         # Configure grid weights
@@ -284,6 +289,22 @@ class MainWindow(tk.Tk):
         self.city_var.set(cities[0])
         self.menu.update_city_menu()
         self.update_prayer_frame_location()
+
+    def open_settings(self):
+        """Open the settings dialog and update API parameters."""
+        dialog = SettingsDialog(self, "API Settings", self.api_method, self.api_school)
+        if dialog.result:
+            self.api_method = dialog.result["method"]
+            self.api_school = dialog.result["school"]
+            
+            # Update global config for other modules
+            import src.core.config as config
+            config.API_METHOD = self.api_method
+            config.API_SCHOOL = self.api_school
+            
+            logger.info(f"API Settings updated: Method={self.api_method}, School={self.api_school}")
+            self.refresh_prayer_times()
+
     def update_prayer_frame_location(self):
         """Update the prayer times display with new location data.
         
@@ -327,9 +348,10 @@ class MainWindow(tk.Tk):
         self.after(1000, self.update_clock)
     def schedule_midnight_update(self):
         """Schedule prayer times update at midnight every day."""
-        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
+        now = datetime.datetime.now()
+        tomorrow = now + datetime.timedelta(days=1)
         midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
-        ms_until_midnight = int((midnight - self.now).total_seconds() * 1000)
+        ms_until_midnight = int((midnight - now).total_seconds() * 1000)
         self.after(ms_until_midnight, self.midnight_update)
         self.update_hijri_date_from_db()  # Update Hijri date at startup 
     def midnight_update(self):

@@ -6,7 +6,10 @@ Each day creates a new log file with format: prayer_app_YYYY-MM-DD.log
 
 import logging
 import logging.handlers
+import time
 from src.core.config import LOGS_DIR, LOG_FILE_PATH, LOG_LEVEL, LOG_FORMAT, LOG_DATE_FORMAT, LOG_BACKUP_COUNT, CONSOLE_LOG_LEVEL
+
+_logging_initialized = False  # Prevent duplicate handler setup
 
 
 
@@ -28,6 +31,10 @@ def setup_logging(level=logging.INFO):
         - Log files stored in project data directory
         - Also logs to console for debugging
     """
+    global _logging_initialized
+    if _logging_initialized:
+        return logging.getLogger()
+    
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
     
@@ -54,7 +61,7 @@ def setup_logging(level=logging.INFO):
     
     # Set rotation filename format to include date
     file_handler.namer = lambda name: name.replace('.log', '') + '_' + \
-        logging.handlers.time.strftime('%Y-%m-%d', logging.handlers.time.localtime()) + '.log'
+        time.strftime('%Y-%m-%d', time.localtime()) + '.log'
     
     # Console handler for real-time feedback (only warnings and errors)
     console_level = logging.WARNING
@@ -70,6 +77,8 @@ def setup_logging(level=logging.INFO):
     # Add handlers to root logger
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+    
+    _logging_initialized = True
     
     # Log startup message
     root_logger.info(f"Logging initialized. Log files stored in: {LOGS_DIR}")

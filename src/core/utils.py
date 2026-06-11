@@ -27,8 +27,8 @@ def check_for_updates():
         subprocess.run(["git", "fetch"], check=True, capture_output=True, cwd=PROJECT_ROOT)
         
         # Step 2: Compare LOCAL vs REMOTE
-        local = subprocess.check_output(["git", "rev-parse", "@"], cwd=PROJECT_ROOT).strip()
-        remote = subprocess.check_output(["git", "rev-parse", "@{u}"], cwd=PROJECT_ROOT).strip()
+        local = subprocess.check_output(["git", "rev-parse", "@"], cwd=PROJECT_ROOT).strip().decode('utf-8')
+        remote = subprocess.check_output(["git", "rev-parse", "@{u}"], cwd=PROJECT_ROOT).strip().decode('utf-8')
         
         if local != remote:
             logger.info("Updates detected! Triggering update_app.sh...")

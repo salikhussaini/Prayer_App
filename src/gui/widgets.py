@@ -47,7 +47,6 @@ class PrayerTimesFrame(tk.Frame):
         super().__init__(master,bg="#000000")
         self.date = date
         pygame.mixer.init()  # Initialize mixer once on class instantiation
-        self.now = PrayerTimesFrame.now
         self.location = location or {"city": "Chicago", "country": "USA"}
         self.labels = {}
         self.alerted_prayers = set()
@@ -206,8 +205,7 @@ class PrayerTimesFrame(tk.Frame):
         - If no more prayers remain today, fetches and displays time until tomorrow's Fajr.
         - Updates the label widget to show the next prayer and countdown.
         """
-        # Current date and time
-        #now = datetime.datetime.now()
+        now = datetime.datetime.now()
         # Will hold the name of the next prayer
         next_prayer = None
         # Smallest time difference to next prayer
@@ -219,14 +217,14 @@ class PrayerTimesFrame(tk.Frame):
             time_str = self.current_times.get(prayer, "--:--")
             try:
                 prayer_time = datetime.datetime.combine(
-                    PrayerTimesFrame.now.date(),
+                    now.date(),
                     datetime.datetime.strptime(time_str, "%H:%M").time()
                 )
                 # Skip if prayer time has already passed
-                if prayer_time < PrayerTimesFrame.now:
+                if prayer_time < now:
                     continue
                 # Calculate time difference to this prayer
-                delta = prayer_time - PrayerTimesFrame.now
+                delta = prayer_time - now
                 # If this is the first future prayer found, or if it occurs sooner than the current next prayer candidate
                 if min_delta is None or delta < min_delta:
                     min_delta = delta
@@ -262,8 +260,9 @@ class PrayerTimesFrame(tk.Frame):
 
         # If all prayers today have passed, calculate time until tomorrow's Fajr
         try:
+            now = datetime.datetime.now()
             # Date for tomorrow
-            tomorrow = PrayerTimesFrame.now.date() + datetime.timedelta(days=1)
+            tomorrow = now.date() + datetime.timedelta(days=1)
             # Fetch tomorrow's prayer times
             tomorrow_times = calculate_prayer_times(tomorrow, self.location)
             # Get tomorrow's Fajr time string
@@ -274,7 +273,7 @@ class PrayerTimesFrame(tk.Frame):
                     tomorrow,
                     datetime.datetime.strptime(fajr_time_str, "%H:%M").time()
                 )
-                delta = fajr_time - PrayerTimesFrame.now
+                delta = fajr_time - now
                 total_seconds = int(delta.total_seconds())
 
                 # Show hours and minutes for Fajr countdown
@@ -315,6 +314,7 @@ class PrayerTimesFrame(tk.Frame):
         
         Note: Runs continuously via tkinter's after() scheduler.
         """
+        now = datetime.datetime.now()
         seconds_until = None
         next_prayer_to_alert = None
         min_delta = None 
@@ -327,15 +327,15 @@ class PrayerTimesFrame(tk.Frame):
                 
             try:
                 # Convert string to today's datetime object
-                prayer_time = datetime.datetime.combine(PrayerTimesFrame.now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
+                prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
                 
                 # Skip if this prayer has already passed
-                if prayer_time < PrayerTimesFrame.now:
+                if prayer_time < now:
                     logger.debug(f"{prayer} has already passed")
                     continue
                 
                 # Determine if this is the soonest upcoming prayer
-                delta = prayer_time - PrayerTimesFrame.now
+                delta = prayer_time - now
                 seconds_until = delta.total_seconds()
                 
                 # Update the minimum delta if this is the first future prayer found,
@@ -443,14 +443,14 @@ class PrayerTimesFrame(tk.Frame):
         Calculates exact milliseconds until next midnight and schedules
         _midnight_reset_wrapper to execute at that time.
         """
-        #now = datetime.datetime.now()
+        now = datetime.datetime.now()
 
         # Calculate next midnight (start of the next day)
-        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
+        tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
 
         # Time until midnight in milliseconds
-        ms_until_midnight = int((next_midnight - PrayerTimesFrame.now).total_seconds() * 1000)
+        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
 
         # Schedule first reset at midnight
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
@@ -470,10 +470,10 @@ class PrayerTimesFrame(tk.Frame):
         self.update_next_prayer()  # refresh next prayer countdown
 
         # Always recalculate next midnight to prevent drift
-        #now = datetime.datetime.now()
-        tomorrow = PrayerTimesFrame.now + datetime.timedelta(days=1)
+        now = datetime.datetime.now()
+        tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
-        ms_until_midnight = int((next_midnight - PrayerTimesFrame.now).total_seconds() * 1000)
+        ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
 
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
         
