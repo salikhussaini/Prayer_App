@@ -5,7 +5,7 @@ import datetime
 import logging
 import os
 import sys
-from PIL import Image, ImageTk
+# from PIL import Image, ImageTk  # Disabled - not available on Raspberry Pi
 from src.gui.components import COUNTRY_CITIES, PrayerTimesFrame, PrayerMenu, SettingsDialog
 from src.core.db import init_db
 from src.core.api import PrayerAPIException, ensure_future_data
@@ -46,9 +46,9 @@ class MainWindow(tk.Tk):
         self.configure(bg=self.BG_COLOR) 
         self.title("Prayer Times")
         
-        # Background image support
-        self.bg_image = None
-        self.photo_image = None
+        # Background image support disabled for Raspberry Pi compatibility
+        # self.bg_image = None
+        # self.photo_image = None
 
         # Get current time
         self.now = PrayerTimesFrame.now
@@ -134,11 +134,10 @@ class MainWindow(tk.Tk):
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         
-        # Setup background AFTER all widgets are created
-        self._setup_background()
-        # Ensure all content is above background
-        self.top_frame.lift()
-        self.prayer_frame.lift()
+        # Background image support disabled - using black background
+        # self._setup_background()
+        # self.top_frame.lift()
+        # self.prayer_frame.lift()
         
         self.update_analog_clock()
         self.update_clock()
