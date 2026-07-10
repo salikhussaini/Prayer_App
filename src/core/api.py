@@ -1,14 +1,24 @@
+"""
+API integration, location utilities, and update checking for Prayer App.
+Combines prayer time fetching, geolocation, and system update functionality.
+"""
+
 import requests
 import time
-from datetime import timedelta, datetime
-from src.core.db import store_prayer_times, get_prayer_times_range_from_db
-from src.core.logger_config import get_logger
-import src.core.config as config
-import re
 import logging
+import os
+import subprocess
+import platform
+from datetime import timedelta, datetime
+from pathlib import Path
+import re
+
+from src.core.db import store_prayer_times, get_prayer_times_range_from_db
+import src.core.config as config
+
 
 # Setup logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Custom Exceptions
 class PrayerAPIException(Exception):
@@ -316,3 +326,144 @@ def ensure_future_data(city, country="", days=None):
         logger.error(f"Unexpected error ensuring future data: {e}", exc_info=True)
         return False
 
+
+# =====================================================================
+# GEOLOCATION
+# =====================================================================
+
+def get_location_from_ip():
+    """Get user's location from IP address.
+    
+    Uses ipapi.co free service for geolocation without requiring API key.
+    
+    Returns:
+        dict: {"city": str, "country": str} or None if detection fails
+    """
+    try:
+        response = requests.get('https://ipapi.co/json/', timeout=5)
+        response.raise_for_status()
+        
+        data = response.json()
+        country = data.get('country_name', '')
+        city = data.get('city', '')
+        
+        logger.info(f"IP Geolocation detected: {city}, {country}")
+        return {"city": city, "country": country}
+        
+    except requests.exceptions.Timeout:
+        logger.warning("IP geolocation timeout")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"IP geolocation request failed: {e}")
+        return None
+    except Exception as e:
+        logger.warning(f"IP geolocation error: {e}")
+        return None
+
+
+def validate_location(location, country_cities):
+    """Validate and sanitize location against available cities.
+    
+    Ensures the provided location matches an available country and city.
+    Falls back to default if validation fails.
+    
+    Args:
+        location (dict): {"city": str, "country": str} or None
+        country_cities (dict): COUNTRY_CITIES reference with available locations
+        
+    Returns:
+        dict: Validated {"city": str, "country": str} or default location
+    """
+    if not location:
+        logger.debug("Location is None, returning default")
+        return {"city": "Chicago", "country": "USA"}
+    
+    country = location.get("country", "").strip()
+    city = location.get("city", "").strip()
+    
+    if country not in country_cities:
+        logger.warning(f"Country '{country}' not supported, using default")
+        return {"city": "Chicago", "country": "USA"}
+    
+    available_cities = country_cities[country]
+    if city not in available_cities:
+        logger.warning(f"City '{city}' not available in {country}, using first available city")
+        return {"city": available_cities[0], "country": country}
+    
+    logger.info(f"Location validated: {city}, {country}")
+    return {"city": city, "country": country}
+
+
+def get_validated_location(country_cities):
+    """Get location from IP and validate against available cities.
+    
+    Attempts to detect user's location from IP address and validates it
+    against the configured list of available cities. Falls back to default
+    if IP detection fails or detected city is not available.
+    
+    Args:
+        country_cities (dict): COUNTRY_CITIES reference with available locations
+        
+    Returns:
+        dict: Validated {"city": str, "country": str}
+    """
+    location = get_location_from_ip()
+    validated = validate_location(location, country_cities)
+    return validated
+
+
+# =====================================================================
+# UPDATE CHECKING (Linux/Raspberry Pi)
+# =====================================================================
+
+COOLDOWN_FILE = config.PROJECT_ROOT / ".update_cooldown"
+COOLDOWN_SECONDS = 300  # 5 minutes
+
+
+def check_for_updates():
+    """Check if updates are available via git and run update script if found.
+    
+    Primarily intended for Linux/Raspberry Pi deployments.
+    On Windows, it will skip as .sh scripts aren't natively supported.
+    Includes cooldown to prevent restart loops if updates fail.
+    """
+    if platform.system() == "Windows":
+        logger.debug("Auto-update check skipped on Windows.")
+        return False
+
+    # Check cooldown
+    if COOLDOWN_FILE.exists():
+        last_check = os.path.getmtime(COOLDOWN_FILE)
+        if time.time() - last_check < COOLDOWN_SECONDS:
+            logger.debug("Update check on cooldown. Skipping...")
+            return False
+
+    update_script = config.PROJECT_ROOT / "src" / "scripts" / "update_app.sh"
+    
+    if not update_script.exists():
+        logger.warning(f"Update script not found at {update_script}")
+        return False
+
+    try:
+        # Check for changes
+        subprocess.run(["git", "fetch"], check=True, capture_output=True, cwd=config.PROJECT_ROOT, timeout=10)
+        
+        # Compare LOCAL vs REMOTE
+        local = subprocess.check_output(["git", "rev-parse", "@"], cwd=config.PROJECT_ROOT, timeout=5).strip().decode('utf-8')
+        remote = subprocess.check_output(["git", "rev-parse", "@{u}"], cwd=config.PROJECT_ROOT, timeout=5).strip().decode('utf-8')
+        
+        if local != remote:
+            logger.info("Updates detected! Triggering update_app.sh...")
+            COOLDOWN_FILE.touch()
+            subprocess.Popen(["bash", str(update_script)], cwd=config.PROJECT_ROOT)
+            return True
+            
+        logger.debug("No updates found.")
+        return False
+        
+    except subprocess.TimeoutExpired:
+        logger.error("Git commands timed out. Skipping update check.")
+        return False
+    except Exception as e:
+        logger.error(f"Error checking for updates: {e}")
+        return False

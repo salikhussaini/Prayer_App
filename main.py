@@ -1,7 +1,7 @@
 import sys
 from src.gui.main_window import MainWindow
-from src.core.utils import check_for_updates
-from src.core.logger_config import setup_logging
+from src.core.api import check_for_updates
+from src.core.helpers import setup_logging
 
 if __name__ == "__main__":
     # Initialize logging

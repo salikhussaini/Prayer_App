@@ -1,20 +1,28 @@
+"""
+GUI Components for Prayer App.
+Consolidates menu, dialogs, and prayer display widgets.
+"""
+
 import tkinter as tk
-import time
+from tkinter import simpledialog, messagebox, ttk
 import datetime
-from src.core.calculations import calculate_prayer_times
-from src.core.logger_config import get_logger
-from src.core.location_utils import get_validated_location
 import threading
 import pygame
 import os
 from datetime import timedelta
-from src.core.config import PROJECT_ROOT
 
-# Setup logging
+from src.core.helpers import calculate_prayer_times, get_logger
+from src.core.api import get_validated_location
+from src.core.config import PROJECT_ROOT, API_CALCULATION_METHODS, API_SCHOOLS, FONT_SIZES, DEFAULT_FONT_SIZE
+
+
 logger = get_logger(__name__)
 
 
-# Define valid cities for each country
+# =====================================================================
+# COUNTRY & CITY DEFINITIONS
+# =====================================================================
+
 COUNTRY_CITIES = {
     "UK": sorted(["London"]),
     "USA": sorted([
@@ -38,17 +46,183 @@ COUNTRY_CITIES = {
     "Indonesia": ["Jakarta"]
 }
 
-class PrayerTimesFrame(tk.Frame):
-    PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
-    # For testing future time
-    # now = datetime.datetime.now() + datetime.timedelta(minutes=1)
-    now = datetime.datetime.now() 
+
+# =====================================================================
+# DIALOGS
+# =====================================================================
+
+class LocationDialog(simpledialog.Dialog):
+    """Dialog to ask the user for their location."""
+    def body(self, master):
+        tk.Label(master, text="Enter your city:").grid(row=0)
+        self.city_entry = tk.Entry(master)
+        self.city_entry.grid(row=0, column=1)
+        return self.city_entry
+
+    def apply(self):
+        self.result = self.city_entry.get()
+
+
+class SettingsDialog(simpledialog.Dialog):
+    """Dialog to configure API calculation methods, school, and font size."""
     
+    def __init__(self, parent, title, current_method, current_school, current_font_size=None):
+        self.current_method = current_method
+        self.current_school = current_school
+        self.current_font_size = current_font_size or DEFAULT_FONT_SIZE
+        self.result = None  # Initialize result to prevent AttributeError if cancelled
+        super().__init__(parent, title)
+
+    def body(self, master):
+        tk.Label(master, text="Calculation Method:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        
+        # Reverse mapping for display
+        self.method_options = {v: k for k, v in API_CALCULATION_METHODS.items()}
+        self.method_combo = ttk.Combobox(master, values=list(self.method_options.keys()), width=40, state="readonly")
+        
+        # Set current value
+        current_method_name = API_CALCULATION_METHODS.get(self.current_method, "Islamic Society of North America (ISNA)")
+        self.method_combo.set(current_method_name)
+        self.method_combo.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(master, text="Madhab (School):").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        
+        self.school_options = {v: k for k, v in API_SCHOOLS.items()}
+        self.school_combo = ttk.Combobox(master, values=list(self.school_options.keys()), width=40, state="readonly")
+        
+        current_school_name = API_SCHOOLS.get(self.current_school, "Hanafi")
+        self.school_combo.set(current_school_name)
+        self.school_combo.grid(row=1, column=1, padx=5, pady=5)
+        
+        tk.Label(master, text="Font Size:").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+        
+        self.font_size_options = list(FONT_SIZES.keys())
+        self.font_size_combo = ttk.Combobox(master, values=self.font_size_options, width=40, state="readonly")
+        self.font_size_combo.set(self.current_font_size)
+        self.font_size_combo.grid(row=2, column=1, padx=5, pady=5)
+        
+        return self.method_combo
+    
+    def apply(self):
+        method_name = self.method_combo.get()
+        school_name = self.school_combo.get()
+        font_size = self.font_size_combo.get()
+        
+        self.result = {
+            "method": self.method_options[method_name],
+            "school": self.school_options[school_name],
+            "font_size": font_size
+        }
+
+
+def show_error(message):
+    """Show an error message dialog."""
+    messagebox.showerror("Error", message)
+
+
+# =====================================================================
+# MENU BAR
+# =====================================================================
+
+class PrayerMenu:
+    """Menu bar for prayer app with location, refresh, and settings."""
+    
+    def __init__(
+        self, master, country_var, city_var, country_cities,
+        on_country_change, on_city_change, on_refresh, on_exit,
+        on_settings=None
+    ):
+        self.master = master
+        self.country_var = country_var
+        self.city_var = city_var
+        self.country_cities = country_cities
+        self.on_country_change = on_country_change
+        self.on_city_change = on_city_change
+        self.on_refresh = on_refresh
+        self.on_exit = on_exit
+        self.on_settings = on_settings
+
+        self.menubar = tk.Menu(master,bg="#000000", fg="#FFFFFF")
+        master.config(menu=self.menubar)
+
+        # File menu
+        file_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="File", menu=file_menu)
+
+        # Location submenu
+        location_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Set Location", menu=location_menu)
+
+        # Country dropdown
+        country_menu = tk.Menu(location_menu, tearoff=0)
+        for country in country_cities.keys():
+            country_menu.add_radiobutton(
+                label=country, variable=country_var, value=country,
+                command=on_country_change
+            )
+        location_menu.add_cascade(label="Country", menu=country_menu)
+
+        # City dropdown
+        self.city_menu = tk.Menu(location_menu, tearoff=0)
+        self.update_city_menu()
+        location_menu.add_cascade(label="City", menu=self.city_menu)
+
+        # Refresh and Exit
+        location_menu.add_separator()
+        location_menu.add_command(label="Refresh Prayer Times", command=on_refresh)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=on_exit)
+
+        # Settings menu
+        settings_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Preferences", command=on_settings if on_settings else self.show_settings)
+
+        # Help menu
+        help_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def update_city_menu(self):
+        """Update city menu based on selected country."""
+        self.city_menu.delete(0, "end")
+        for city in self.country_cities[self.country_var.get()]:
+            self.city_menu.add_radiobutton(
+                label=city, variable=self.city_var, value=city,
+                command=self.on_city_change
+            )
+
+    def show_about(self):
+        """Show about dialog."""
+        messagebox.showinfo(
+            "About Prayer Times",
+            "Prayer Times App\nVersion 1.0\n\nCreated by Your Name\nPowered by Aladhan API"
+        )
+
+    def show_settings(self):
+        """Show settings placeholder dialog."""
+        messagebox.showinfo(
+            "Settings",
+            "Settings dialog not implemented yet."
+        )
+
+
+# =====================================================================
+# PRAYER TIMES DISPLAY WIDGET
+# =====================================================================
+
+class PrayerTimesFrame(tk.Frame):
     """Frame displaying daily prayer times with location selection and next prayer countdown."""
+    
+    PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+    now = datetime.datetime.now()
+    
     def __init__(self, master=None, date=None, location=None):
-        super().__init__(master,bg="#000000")
+        # Black background to allow parent's background image to show
+        super().__init__(master, bg="#000000")
         self.date = date
-        pygame.mixer.init()  # Initialize mixer once on class instantiation
+        pygame.mixer.init()  # Initialize mixer once
+        
         # Try IP geolocation if location not provided
         if location is None:
             location = get_validated_location(COUNTRY_CITIES)
@@ -56,14 +230,19 @@ class PrayerTimesFrame(tk.Frame):
         self.labels = {}
         self.alerted_prayers = set()
         self.current_times = {}
+        
         self.next_prayer_label = tk.Label(
             self, 
             text="", 
-            font=("Segoe UI", 32, "bold"), 
-            fg="#540000", bg="#000000", 
-            pady=15
+            font=("Segoe UI", 32, "bold"),
+            bg="#000000",
+            fg="#FFD700",
+            pady=15,
+            relief=tk.RAISED,
+            bd=3
         )
         self.next_prayer_label.grid(row=0, column=0, columnspan=5, pady=(10, 20))
+        
         for col in range(5):
             self.grid_columnconfigure(col, weight=1)
 
@@ -77,93 +256,70 @@ class PrayerTimesFrame(tk.Frame):
         self.schedule_midnight_reset() 
 
         self.pack_propagate(False)
-        self.configure(padx=10, pady=10)
+        # Remove padding and background to maximize transparency
+        # self.configure(padx=10, pady=10)
 
         self.update_clock()
 
     def _init_labels(self):
-        """Initialize and layout all prayer time label widgets.
-
-        Creates:
-        - A frame for each prayer (Fajr, Dhuhr, Asr, Maghrib, Isha)
-        - Prayer name label
-        - Time display label
-        - Stores references in self.labels dictionary
-        """
+        """Initialize and layout all prayer time label widgets."""
         self.prayer_frames = {}
-        accent_color = "#006853" 
-        text_color = "#006853"
-        card_bg = "#000000"
+        accent_color = "#00FF99"  # Brighter green for visibility
+        text_color = "#00FF99"
+        border_color = "#00FF99"  # Bright green border for visibility
 
         for idx, prayer in enumerate(self.PRAYERS):
+            # Transparent frame with bright border - black bg to show parent image
             frame = tk.Frame(
-                self, 
-                bg=card_bg, 
-                highlightbackground=accent_color, 
-                highlightthickness=2, 
-                padx=10, pady=10
+                self,
+                bg="#000000",
+                highlightbackground=border_color, 
+                highlightthickness=3, 
+                padx=15, pady=15
             )
             frame.grid(row=2, column=idx, padx=10, pady=20, sticky="nsew")
 
+            # Transparent labels - black background to show parent image
             lbl_prayer = tk.Label(
                 frame, text=prayer, 
-                font=("Segoe UI", 18, "bold"), 
-                bg=card_bg, fg=text_color
+                font=("Segoe UI", 18, "bold"),
+                bg="#000000",
+                fg=text_color
             )
             lbl_prayer.pack(padx=5, pady=(5, 2))
 
             lbl_time = tk.Label(
                 frame, text="--:--", 
-                font=("Segoe UI", 33), 
-                bg=card_bg, fg=accent_color
+                font=("Segoe UI", 40),
+                bg="#000000",
+                fg=accent_color
             )
-            lbl_time.pack(padx=5, pady=(2, 5))
+            lbl_time.pack(padx=5, pady=(2, 8))
 
             self.labels[prayer] = lbl_time
             self.prayer_frames[prayer] = frame
         
     def update_clock(self):
-        """Update the clock label every second with AM/PM format."""
-        # For testing future time
-        # PrayerTimesFrame.now = datetime.datetime.now() + datetime.timedelta(minutes=1)
+        """Update the clock label every second."""
         PrayerTimesFrame.now = datetime.datetime.now()
         self.now = PrayerTimesFrame.now
         self.after(1000, self.update_clock)
 
     def on_location_change(self):
-        """Handle location change events.
-        
-        Performs:
-        1. Clears any existing prayer alerts
-        2. Updates displayed prayer times
-        3. Resets next prayer countdown
-        """
+        """Handle location change events."""
         self.update_times()
         self.update_next_prayer()
-        self.alerted_prayers.clear()  # reset alerts for new location
+        self.alerted_prayers.clear()
 
     def update_times(self, times=None):
-        """Update displayed prayer times with optional override values.
-        
-        Args:
-            times (dict, optional): Pre-calculated prayer times in {'Prayer': 'HH:MM'} format.
-                                    If None, times will be calculated automatically.
-                                    
-        Behavior:
-        - Converts 24-hour times to 12-hour AM/PM format
-        - Handles calculation errors gracefully
-        - Updates all prayer time labels
-        - Triggers next prayer countdown update
-        
-        Note: Passing times parameter bypasses calculation - use for testing or
-            when you have pre-computed times.
-        """
+        """Update displayed prayer times."""
         if times is None:
             try:
                 times = calculate_prayer_times(self.date, self.location)
             except Exception as e:
                 logger.error(f"Error calculating prayer times: {e}")
                 times = {}
+        
         self.current_times = times
         for prayer in self.PRAYERS:
             time_str = times.get(prayer, "--:--")
@@ -176,20 +332,9 @@ class PrayerTimesFrame(tk.Frame):
         self.update_next_prayer()
 
     def format_time_delta(self, delta):
-        """
-        Convert a timedelta object into hours and minutes.
-
-        Args:
-            delta (datetime.timedelta): The time difference to format.
-
-        Returns:
-            tuple: (hours, minutes) representing the delta.
-        """
-        # Get total seconds from timedelta
+        """Convert a timedelta object into hours and minutes."""
         total_seconds = int(delta.total_seconds())
-        # Calculate full hours and leftover seconds
         hours, remainder = divmod(total_seconds, 3600)
-        # Calculate full minutes from remainder seconds
         minutes, _ = divmod(remainder, 60)
         return hours, minutes
 
@@ -197,64 +342,46 @@ class PrayerTimesFrame(tk.Frame):
         """Highlight the card for the next prayer."""
         for prayer, frame in self.prayer_frames.items():
             if prayer == next_prayer:
-                frame.config(highlightbackground="#FFD700", highlightthickness=4)  # gold border
+                frame.config(highlightbackground="#FFD700", highlightthickness=5)  # Gold border, thicker
             else:
-                frame.config(highlightbackground="#00FF99", highlightthickness=2)
-
+                frame.config(highlightbackground="#00FF99", highlightthickness=3)  # Bright green
 
     def update_next_prayer(self):
-        """
-        Calculate and display the time remaining until the next prayer.
-
-        - Checks all today's prayer times and finds the soonest upcoming prayer.
-        - If no more prayers remain today, fetches and displays time until tomorrow's Fajr.
-        - Updates the label widget to show the next prayer and countdown.
-        """
+        """Calculate and display the time remaining until the next prayer."""
         now = datetime.datetime.now()
-        # Will hold the name of the next prayer
         next_prayer = None
-        # Smallest time difference to next prayer
         min_delta = None
 
-        # Loop through today's prayers to find the next upcoming one
         for prayer in self.PRAYERS:
-            # Get prayer time string and convert to datetime object
             time_str = self.current_times.get(prayer, "--:--")
             try:
                 prayer_time = datetime.datetime.combine(
                     now.date(),
                     datetime.datetime.strptime(time_str, "%H:%M").time()
                 )
-                # Skip if prayer time has already passed
                 if prayer_time < now:
                     continue
-                # Calculate time difference to this prayer
                 delta = prayer_time - now
-                # If this is the first future prayer found, or if it occurs sooner than the current next prayer candidate
                 if min_delta is None or delta < min_delta:
                     min_delta = delta
                     next_prayer = prayer
             except Exception:
-                continue  # Skip invalid times silently
+                continue
 
         if next_prayer and min_delta:
-            # If next prayer is today, display its countdown
             total_seconds = int(min_delta.total_seconds())
             if total_seconds < 60:
-                # Just 1 second left, refresh quickly
                 self.next_prayer_label.config(
                     text=f"Next prayer: {next_prayer} in {total_seconds} seconds..."
                 )
                 self.after(1000, self.update_next_prayer)
             elif total_seconds < 3600:
-                # Less than an hour: show minutes and seconds
                 minutes, seconds = divmod(total_seconds, 60)
                 self.next_prayer_label.config(
                     text=f"Next prayer: {next_prayer} in {minutes}m {seconds}s"
                 )
                 self.after(1000, self.update_next_prayer)
             else:
-                # More than an hour: show hours and minutes
                 hours, minutes = self.format_time_delta(min_delta)
                 self.next_prayer_label.config(
                     text=f"Next prayer: {next_prayer} in {hours}h {minutes}m"
@@ -263,14 +390,11 @@ class PrayerTimesFrame(tk.Frame):
             self.highlight_next_prayer(next_prayer)
             return        
 
-        # If all prayers today have passed, calculate time until tomorrow's Fajr
+        # All prayers today have passed, calculate time until tomorrow's Fajr
         try:
             now = datetime.datetime.now()
-            # Date for tomorrow
             tomorrow = now.date() + datetime.timedelta(days=1)
-            # Fetch tomorrow's prayer times
             tomorrow_times = calculate_prayer_times(tomorrow, self.location)
-            # Get tomorrow's Fajr time string
             fajr_time_str = tomorrow_times.get("Fajr")
 
             if fajr_time_str:
@@ -281,20 +405,16 @@ class PrayerTimesFrame(tk.Frame):
                 delta = fajr_time - now
                 total_seconds = int(delta.total_seconds())
 
-                # Show hours and minutes for Fajr countdown
                 hours, minutes = self.format_time_delta(delta)
-                # Update label to show countdown to tomorrow's Fajr
                 self.next_prayer_label.config(
                     text=f"Next prayer: Fajr (tomorrow) in {hours}h {minutes}m"
                 )
 
-                # Use 1-minute refresh until under 1 hour, then every second
                 if total_seconds < 3600:
                     self.after(1000, self.update_next_prayer)
                 else:
                     self.after(60000, self.update_next_prayer)
             else:
-                # No Fajr time available for tomorrow
                 self.next_prayer_label.config(text="No prayer times available for tomorrow.")
                 self.after(60000, self.update_next_prayer)
         except Exception:
@@ -302,55 +422,30 @@ class PrayerTimesFrame(tk.Frame):
             self.after(60000, self.update_next_prayer)
 
     def check_prayer_alerts(self):
-        """Monitor prayer times and trigger alerts when appropriate.
-        
-        Operation:
-        1. Checks all upcoming prayer times
-        2. Finds the next occurring prayer
-        3. Triggers audio alert when prayer time is within 30 seconds
-        4. Prevents duplicate alerts using alerted_prayers set
-        
-        Scheduling:
-        - Checks more frequently as prayer time approaches:
-        - Every 5 seconds when <15 seconds away
-        - Every 10 seconds when <1 minute away
-        - Every 20 seconds when <1.25 minutes away
-        - Gradually increases intervals for distant prayers
-        
-        Note: Runs continuously via tkinter's after() scheduler.
-        """
+        """Monitor prayer times and trigger alerts when appropriate."""
         now = datetime.datetime.now()
-        seconds_until = None
         next_prayer_to_alert = None
         min_delta = None 
 
-        # Only iterate through actual prayer times, skip other keys like 'hijri_date'
         for prayer in self.PRAYERS:
             time_str = self.current_times.get(prayer)
             if not time_str:
                 continue
                 
             try:
-                # Convert string to today's datetime object
                 prayer_time = datetime.datetime.combine(now.date(), datetime.datetime.strptime(time_str, "%H:%M").time())
                 
-                # Skip if this prayer has already passed
                 if prayer_time < now:
                     logger.debug(f"{prayer} has already passed")
                     continue
                 
-                # Determine if this is the soonest upcoming prayer
                 delta = prayer_time - now
                 seconds_until = delta.total_seconds()
                 
-                # Update the minimum delta if this is the first future prayer found,
-                # or if this prayer occurs sooner than the current next prayer candidate
                 if (min_delta is None or seconds_until < min_delta) and seconds_until > 0:
-                    # Keep track of soonest upcoming prayer
                     min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
-                # Alert user if this prayer is within 30 seconds
                 if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
@@ -366,16 +461,16 @@ class PrayerTimesFrame(tk.Frame):
         # Schedule next check based on how soon the next prayer is
         CHECK_INTERVALS = [
             (15, 5000),
-            (60, 10000),    # Check every 10 seconds if within 1 minute
-            (75, 20000),    # Check every 20 seconds if within 1.25 minutes
-            (120, 30000),   # Check every 30 seconds if within 2 minutes
-            (240, 60000),   # Check every 1 minute if within 4 minutes
-            (600, 120000),  # Check every 2 minutes if within 10 minutes
-            (900, 300000),  # Check every 5 minutes if within 15 minutes
-            (1200, 600000), # Check every 10 minutes if within 20 minutes
-            (1800, 900000), # Check every 15 minutes if within 30 minutes
-            (3600, 1200000), # Check every 20 minutes if within 1 hour
-            (7200, 2400000) # Check every 40 minutes if within 2 hours
+            (60, 10000),
+            (75, 20000),
+            (120, 30000),
+            (240, 60000),
+            (600, 120000),
+            (900, 300000),
+            (1200, 600000),
+            (1800, 900000),
+            (3600, 1200000),
+            (7200, 2400000)
         ]
 
         try:
@@ -385,25 +480,15 @@ class PrayerTimesFrame(tk.Frame):
                         self.after(interval, self.check_prayer_alerts)
                         break
                 else:
-                    self.after(6000000, self.check_prayer_alerts)  # Default to 1 hour checks
+                    self.after(6000000, self.check_prayer_alerts)
             else:
-                self.after(6000000, self.check_prayer_alerts)  # No prayer found, retry in 1 hour
+                self.after(6000000, self.check_prayer_alerts)
         except Exception as e:
             logger.error(f"Error scheduling prayer alert checks: {e}")
-            self.after(12000000, self.check_prayer_alerts)  # Fallback to 2 hour checks on error
+            self.after(12000000, self.check_prayer_alerts)
 
     def alert_user(self, prayer):
-        """Play alert sounds for prayer time notification.
-        
-        Args:
-            prayer (str): Prayer name (Fajr, Dhuhr, Asr, Maghrib, Isha)
-            
-        Behavior:
-        - Plays prayer-specific Athan (Fajr has unique call)
-        - Follows with Dua audio
-        - Handles missing files gracefully with logging
-        - Runs in background thread
-        """
+        """Play alert sounds for prayer time notification."""
         def play_with_wait(path):
             """Load and play audio file, wait for completion."""
             if not os.path.exists(path):
@@ -413,7 +498,7 @@ class PrayerTimesFrame(tk.Frame):
             try:
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play()
-                while pygame.mixer.music.get_busy():  # Wait until finished
+                while pygame.mixer.music.get_busy():
                     pygame.time.Clock().tick(10)
                 logger.debug(f"Successfully played: {path}")
             except pygame.error as e:
@@ -440,40 +525,20 @@ class PrayerTimesFrame(tk.Frame):
                 daemon=True
             ).start()
 
-            
     def schedule_midnight_reset(self):
-        """Schedule daily reset of prayer alerts at midnight.
-    
-        Calculates exact milliseconds until next midnight and schedules
-        _midnight_reset_wrapper to execute at that time.
-        """
+        """Schedule daily reset of prayer alerts at midnight."""
         now = datetime.datetime.now()
-
-        # Calculate next midnight (start of the next day)
         tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
-
-        # Time until midnight in milliseconds
         ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
-
-        # Schedule first reset at midnight
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
 
     def _midnight_reset_wrapper(self):
-        """Wrapper function for midnight reset operations.
-        
-        Handles:
-        1. Executing reset_alerts()
-        2. Recalculating next midnight
-        3. Rescheduling itself for following day
-        
-        Ensures daily prayer alert resets remain precisely timed.
-        """
+        """Wrapper function for midnight reset operations."""
         self.reset_alerts()
-        self.update_times()        # refresh prayer times for new day
-        self.update_next_prayer()  # refresh next prayer countdown
+        self.update_times()
+        self.update_next_prayer()
 
-        # Always recalculate next midnight to prevent drift
         now = datetime.datetime.now()
         tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
@@ -482,17 +547,10 @@ class PrayerTimesFrame(tk.Frame):
         self.after(ms_until_midnight, self._midnight_reset_wrapper)
         
     def reset_alerts(self):
-        """Reset all prayer alert tracking at day boundary.
-        
-        Performs:
-        1. Clears alerted_prayers set
-        2. Updates to current date
-        3. Refreshes prayer times display
-        4. Restarts countdown and alert checks
-        """
+        """Reset all prayer alert tracking at day boundary."""
         self.alerted_prayers.clear()
-        self.date = datetime.date.today()  # update to new day
-        self.update_times()                # refresh prayer times
-        self.update_next_prayer()           # restart countdown
-        self.check_prayer_alerts()          # restart alert checks
+        self.date = datetime.date.today()
+        self.update_times()
+        self.update_next_prayer()
+        self.check_prayer_alerts()
         logger.info(f"Prayer alerts reset for new day ({datetime.date.today()})")

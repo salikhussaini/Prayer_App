@@ -5,17 +5,15 @@ import datetime
 import logging
 import os
 import sys
-from src.gui.widgets import COUNTRY_CITIES, PrayerTimesFrame
-from src.gui.menu import PrayerMenu
-from src.gui.dialogs import SettingsDialog
+from PIL import Image, ImageTk
+from src.gui.components import COUNTRY_CITIES, PrayerTimesFrame, PrayerMenu, SettingsDialog
 from src.core.db import init_db
-from src.core.api import PrayerAPIException
-from src.core.logger_config import setup_logging, get_logger
+from src.core.api import PrayerAPIException, ensure_future_data
+from src.core.helpers import setup_logging, get_logger
 from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL, FONT_SIZES, DEFAULT_FONT_SIZE, PROJECT_ROOT
 
 from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
-from src.core.api import ensure_future_data
 
 # Initialize logging system
 setup_logging(level=logging.INFO)
@@ -25,7 +23,7 @@ logger = get_logger(__name__)
 class MainWindow(tk.Tk):
     BG_COLOR = "#000000"
     PRIMARY_COLOR = "#006853"
-    HOUR_HAND_COLOR = "#00FF99"
+    HOUR_HAND_COLOR = "#00FF99"  # Brighter green
     SECOND_HAND_COLOR = "#FF5555"
 
     def __init__(self):
@@ -47,6 +45,10 @@ class MainWindow(tk.Tk):
         # Set background color to black
         self.configure(bg=self.BG_COLOR) 
         self.title("Prayer Times")
+        
+        # Background image support
+        self.bg_image = None
+        self.photo_image = None
 
         # Get current time
         self.now = PrayerTimesFrame.now
@@ -132,13 +134,58 @@ class MainWindow(tk.Tk):
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         
+        # Setup background AFTER all widgets are created
+        self._setup_background()
+        # Ensure all content is above background
+        self.top_frame.lift()
+        self.prayer_frame.lift()
+        
         self.update_analog_clock()
         self.update_clock()
         self.schedule_midnight_update()
+    def _setup_background(self):
+        """Load and set background image if it exists, resized to fill the window."""
+        # Check for background images in multiple formats
+        assets_dir = PROJECT_ROOT / "src/assets"
+        bg_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+        
+        # First check for specifically named background files
+        for ext in bg_extensions:
+            bg_path = assets_dir / f"background{ext}"
+            if os.path.exists(bg_path):
+                break
+        else:
+            # If no background.* found, use the first image file in assets
+            image_files = [f for f in os.listdir(assets_dir) if any(f.lower().endswith(ext) for ext in bg_extensions)]
+            if image_files:
+                bg_path = assets_dir / image_files[0]
+            else:
+                logger.debug(f"No background image found in {assets_dir}")
+                return
+        
+        try:
+            # Get screen dimensions
+            screen_width = self.winfo_screenwidth()
+            screen_height = self.winfo_screenheight()
+            
+            # Open and resize image to fill the window
+            self.bg_image = Image.open(bg_path)
+            self.bg_image = self.bg_image.resize((screen_width, screen_height), Image.Resampling.LANCZOS)
+            self.photo_image = ImageTk.PhotoImage(self.bg_image)
+            
+            # Create background label and place at bottom
+            bg_label = tk.Label(self, image=self.photo_image, bg=self.BG_COLOR)
+            bg_label.image = self.photo_image  # Keep reference
+            bg_label.place(x=0, y=0, width=screen_width, height=screen_height)
+            # Background will be behind content widgets (they call lift() after this)
+            logger.info(f"Background image loaded and resized: {bg_path}")
+        except Exception as e:
+            logger.warning(f"Failed to load background image: {e}")
+    
     def configure_styles(self):
         style = ttk.Style()
         style.configure("TLabel", font=("Segoe UI", 20), background=self.BG_COLOR, foreground=self.PRIMARY_COLOR, anchor="e", justify="right")
-        style.configure("Clock.TLabel", font=("Segoe UI", 85, "bold"), foreground=self.PRIMARY_COLOR, background=self.BG_COLOR, anchor="e", justify="right")
+        style.configure("Clock.TLabel", font=("Segoe UI", 85, "bold"), foreground="#00FF99", background=self.BG_COLOR, anchor="e", justify="right")
         style.configure("Date.TLabel", font=("Segoe UI", 40), foreground=self.PRIMARY_COLOR, background=self.BG_COLOR, anchor="e", justify="right")
 
     def check_and_ensure_tomorrow_data(self, city, country):
