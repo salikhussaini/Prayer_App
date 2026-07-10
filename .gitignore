@@ -27,6 +27,7 @@ dist/
 # all log files and log directories
 # -------------------------
 logs/
+logs/prayer_app.log
 *.log
 # -------------------------
 # Data / Database files

@@ -3,6 +3,7 @@ import time
 import datetime
 from src.core.calculations import calculate_prayer_times
 from src.core.logger_config import get_logger
+from src.core.location_utils import get_validated_location
 import threading
 import pygame
 import os
@@ -47,7 +48,10 @@ class PrayerTimesFrame(tk.Frame):
         super().__init__(master,bg="#000000")
         self.date = date
         pygame.mixer.init()  # Initialize mixer once on class instantiation
-        self.location = location or {"city": "Chicago", "country": "USA"}
+        # Try IP geolocation if location not provided
+        if location is None:
+            location = get_validated_location(COUNTRY_CITIES)
+        self.location = location
         self.labels = {}
         self.alerted_prayers = set()
         self.current_times = {}
