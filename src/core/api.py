@@ -159,7 +159,7 @@ def fetch_prayer_times_from_api(date, city, country="", max_retries=None):
 
 
     
-def fetch_prayer_times_range(start_date, end_date, city, country=""):
+def fetch_prayer_times_range(start_date, end_date, city, country="", max_retries=None):
     """Fetch prayer times for a date range from API and store each day in DB.
     
     Args:
@@ -167,6 +167,7 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
         end_date: datetime.date end of range
         city: City name
         country: Country name
+        max_retries: Maximum retry attempts on failure (uses API_MAX_RETRIES if None)
         
     Returns:
         bool: True on success, False otherwise
@@ -174,7 +175,11 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
     Raises:
         PrayerAPIConnectionError: Network/connection issues
         PrayerAPIResponseError: Invalid API response
+        PrayerAPIRateLimit: API rate limit exceeded
     """
+    if max_retries is None:
+        max_retries = config.API_MAX_RETRIES
+    
     url = f"{config.API_URL_CALENDAR}/from/{start_date.strftime('%d-%m-%Y')}/to/{end_date.strftime('%d-%m-%Y')}"
     
     params = {
@@ -186,58 +191,67 @@ def fetch_prayer_times_range(start_date, end_date, city, country=""):
         "iso8601": "false",
     }
 
-    try:
-        response = requests.get(url, params=params, timeout=config.API_TIMEOUT)
-        
-        if response.status_code == 429:
-            raise PrayerAPIRateLimit("API rate limit exceeded")
-        
-        response.raise_for_status()
-        data = response.json()
-
-        # The API returns data in data.data array for each day
-        for day_data in data.get("data", []):            
-            greg_date_str = day_data["date"]["gregorian"]["date"]  # e.g. "01-02-2025"
-            hijri_date_str = day_data['date']['hijri']['date'] # e.g. "01-02-1446"
-            # Convert to datetime object
-            date_obj = datetime.strptime(greg_date_str, "%d-%m-%Y").date()
-            timings = day_data["timings"]
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, params=params, timeout=config.API_TIMEOUT)
             
-            # Convert timings to 24-hour format
-            times = {
-                "Fajr": convert_to_24hr(clean_timezone_suffix(timings["Fajr"])),
-                "Dhuhr": convert_to_24hr(clean_timezone_suffix(timings["Dhuhr"])),
-                "Asr": convert_to_24hr(clean_timezone_suffix(timings["Asr"])),
-                "Maghrib": convert_to_24hr(clean_timezone_suffix(timings["Maghrib"])),
-                "Isha": convert_to_24hr(clean_timezone_suffix(timings["Isha"]))
-            }
-            # Store in DB
-            store_prayer_times(date_obj, hijri_date_str, city, times)
-        
-        logger.info(f"Successfully stored prayer times for {city} between {start_date} and {end_date}")
-        return True
-        
-    except requests.HTTPError as e:
-        if e.response.status_code == 429:
-            raise PrayerAPIRateLimit(f"API rate limit exceeded: {e}")
-        logger.error(f"HTTP error {e.response.status_code}: {e}")
-        raise PrayerAPIResponseError(f"API HTTP error: {e}")
-        
-    except requests.ConnectionError as e:
-        logger.error(f"Connection error fetching date range: {e}")
-        raise PrayerAPIConnectionError(f"Failed to connect to API: {e}")
-        
-    except requests.Timeout as e:
-        logger.error(f"Request timeout: {e}")
-        raise PrayerAPIConnectionError(f"Request timeout: {e}")
-        
-    except (KeyError, ValueError) as e:
-        logger.error(f"Invalid API response format: {e}")
-        raise PrayerAPIResponseError(f"Failed to parse API response: {e}")
-        
-    except Exception as e:
-        logger.error(f"Unexpected error fetching prayer times range: {e}", exc_info=True)
-        raise PrayerAPIException(f"Unexpected error: {e}")
+            if response.status_code == 429:
+                raise PrayerAPIRateLimit("API rate limit exceeded")
+            
+            response.raise_for_status()
+            data = response.json()
+
+            # The API returns data in data.data array for each day
+            for day_data in data.get("data", []):            
+                greg_date_str = day_data["date"]["gregorian"]["date"]  # e.g. "01-02-2025"
+                hijri_date_str = day_data['date']['hijri']['date'] # e.g. "01-02-1446"
+                # Convert to datetime object
+                date_obj = datetime.strptime(greg_date_str, "%d-%m-%Y").date()
+                timings = day_data["timings"]
+                
+                # Convert timings to 24-hour format
+                times = {
+                    "Fajr": convert_to_24hr(clean_timezone_suffix(timings["Fajr"])),
+                    "Dhuhr": convert_to_24hr(clean_timezone_suffix(timings["Dhuhr"])),
+                    "Asr": convert_to_24hr(clean_timezone_suffix(timings["Asr"])),
+                    "Maghrib": convert_to_24hr(clean_timezone_suffix(timings["Maghrib"])),
+                    "Isha": convert_to_24hr(clean_timezone_suffix(timings["Isha"]))
+                }
+                # Store in DB
+                store_prayer_times(date_obj, hijri_date_str, city, times)
+            
+            logger.info(f"Successfully stored prayer times for {city} between {start_date} and {end_date}")
+            return True
+            
+        except requests.HTTPError as e:
+            if e.response.status_code == 429:
+                raise PrayerAPIRateLimit(f"API rate limit exceeded: {e}")
+            logger.error(f"HTTP error {e.response.status_code}: {e}")
+            raise PrayerAPIResponseError(f"API HTTP error: {e}")
+            
+        except requests.ConnectionError as e:
+            logger.warning(f"Connection error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = config.API_BACKOFF_BASE ** attempt
+                time.sleep(wait_time)
+            else:
+                raise PrayerAPIConnectionError(f"Failed to connect after {max_retries} attempts: {e}")
+                
+        except requests.Timeout as e:
+            logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = config.API_BACKOFF_BASE ** attempt
+                time.sleep(wait_time)
+            else:
+                raise PrayerAPIConnectionError(f"Request timeout after {max_retries} attempts: {e}")
+                
+        except (KeyError, ValueError) as e:
+            logger.error(f"Invalid API response format: {e}")
+            raise PrayerAPIResponseError(f"Failed to parse API response: {e}")
+            
+        except Exception as e:
+            logger.error(f"Unexpected error fetching prayer times range: {e}", exc_info=True)
+            raise PrayerAPIException(f"Unexpected error: {e}")
 
 
 def ensure_future_data(city, country="", days=None):

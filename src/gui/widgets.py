@@ -8,6 +8,7 @@ import threading
 import pygame
 import os
 from datetime import timedelta
+from src.core.config import PROJECT_ROOT
 
 # Setup logging
 logger = get_logger(__name__)
@@ -344,13 +345,12 @@ class PrayerTimesFrame(tk.Frame):
                 
                 # Update the minimum delta if this is the first future prayer found,
                 # or if this prayer occurs sooner than the current next prayer candidate
-                if (min_delta is None or delta < min_delta) and seconds_until > 0:
+                if (min_delta is None or seconds_until < min_delta) and seconds_until > 0:
                     # Keep track of soonest upcoming prayer
-                    min_delta = delta.total_seconds()
+                    min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
                 # Alert user if this prayer is within 30 seconds
-                seconds_until = delta.total_seconds()
                 if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
@@ -427,11 +427,11 @@ class PrayerTimesFrame(tk.Frame):
             play_with_wait(second_path)
 
         if prayer in self.PRAYERS:
-            dua_path = os.path.join("src", "assets", "dua.wav")
+            dua_path = PROJECT_ROOT / "src/assets/dua.wav"
             if prayer == "Fajr":
-                athan_path = os.path.join("src", "assets", "fajr_athan.wav")
+                athan_path = PROJECT_ROOT / "src/assets/fajr_athan.wav"
             else:
-                athan_path = os.path.join("src", "assets", "athan.wav")
+                athan_path = PROJECT_ROOT / "src/assets/athan.wav"
 
             logger.info(f"Alert triggered for {prayer}")
             threading.Thread(

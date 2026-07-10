@@ -11,7 +11,7 @@ from src.gui.dialogs import SettingsDialog
 from src.core.db import init_db
 from src.core.api import PrayerAPIException
 from src.core.logger_config import setup_logging, get_logger
-from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL, FONT_SIZES, DEFAULT_FONT_SIZE
+from src.core.config import AUTO_RESTART_DAYS, API_METHOD, API_SCHOOL, FONT_SIZES, DEFAULT_FONT_SIZE, PROJECT_ROOT
 
 from datetime import timedelta
 from src.core.db import get_prayer_times_from_db
@@ -177,9 +177,9 @@ class MainWindow(tk.Tk):
         Issues warnings if files are missing.
         """
         required_assets = [
-            "src/assets/dua.wav",
-            "src/assets/fajr_athan.wav", 
-            "src/assets/athan.wav"
+            PROJECT_ROOT / "src/assets/dua.wav",
+            PROJECT_ROOT / "src/assets/fajr_athan.wav",
+            PROJECT_ROOT / "src/assets/athan.wav",
         ]
         for asset in required_assets:
             if not os.path.exists(asset):
@@ -230,6 +230,11 @@ class MainWindow(tk.Tk):
         second_x = center + second_len * math.sin(second_angle)
         second_y = center - second_len * math.cos(second_angle)
         self.analog_clock.create_line(center, center, second_x, second_y, fill=self.SECOND_HAND_COLOR, width=1)
+
+        # Update digital clock with current time
+        now = datetime.datetime.now()
+        digital_time = now.strftime("%I:%M %p")
+        self.clock_label.config(text=digital_time)
 
         # Schedule next update
         self.after(1000, self.update_analog_clock)
@@ -364,13 +369,12 @@ class MainWindow(tk.Tk):
         """
         self.prayer_frame.update_times()
     def update_clock(self):
-        """Update the clock label every second with AM/PM format."""
-        #self.now = datetime.datetime.now()
-        # For testing future time
-        #self.now = datetime.datetime.now() + timedelta(hours=15) + timedelta(minutes=1)
+        """Update clock state checks every second (uptime restart, midnight reset).
+        
+        Note: Digital clock label is now updated in update_analog_clock()
+        This method handles application-level checks and scheduling.
+        """
         self.now = PrayerTimesFrame.now
-        # 12-hour format with AM/PM
-        self.clock_label.config(text=self.now.strftime("%I:%M %p"))
 
         # Check for uptime-based auto-restart (e.g., every week)
         uptime = datetime.datetime.now() - self.start_time
