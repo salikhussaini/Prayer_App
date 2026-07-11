@@ -179,7 +179,11 @@ class PrayerMenu:
     def update_city_menu(self):
         """Update city menu based on selected country."""
         self.city_menu.delete(0, "end")
-        for city in self.country_cities[self.country_var.get()]:
+        country = self.country_var.get()
+        if country not in self.country_cities:
+            logger.warning(f"Invalid country in menu: {country}")
+            return
+        for city in self.country_cities[country]:
             self.city_menu.add_radiobutton(
                 label=city, variable=self.city_var, value=city,
                 command=self.on_city_change
@@ -426,8 +430,9 @@ class PrayerTimesFrame(tk.Frame):
                     min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
-                if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
-                    logger.info(f"🔔 Prayer alert triggered for {prayer}")
+                # Check if prayer is within alert threshold (30 seconds before)
+                if 0 <= seconds_until <= core.ALERT_THRESHOLD_SECONDS and prayer not in self.alerted_prayers:
+                    logger.info(f"🔔 Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
             except ValueError as e:
@@ -437,68 +442,90 @@ class PrayerTimesFrame(tk.Frame):
                 logger.error(f"Unexpected error checking alerts for {prayer}: {e}")
                 continue
         
-        CHECK_INTERVALS = [
-            (15, 5000), (60, 10000), (75, 20000), (120, 30000), (240, 60000),
-            (600, 120000), (900, 300000), (1200, 600000), (1800, 900000),
-            (3600, 1200000), (7200, 2400000)
-        ]
-
+        # Adaptive check interval: check more frequently when close to prayer time
         try:
             if min_delta is not None:
-                for limit, interval in CHECK_INTERVALS:
-                    if min_delta < limit:
-                        self.after(interval, self.check_prayer_alerts)
-                        break
+                if min_delta < 15:
+                    # Less than 15 seconds away: check every second
+                    check_interval = 1000
+                elif min_delta < 60:
+                    # Less than 60 seconds away: check every 2 seconds
+                    check_interval = 2000
+                elif min_delta < 300:
+                    # Less than 5 minutes: check every 5 seconds
+                    check_interval = 5000
+                elif min_delta < 900:
+                    # Less than 15 minutes: check every 10 seconds
+                    check_interval = 10000
+                elif min_delta < 3600:
+                    # Less than 1 hour: check every 30 seconds
+                    check_interval = 30000
                 else:
-                    self.after(6000000, self.check_prayer_alerts)
+                    # More than 1 hour: check every 5 minutes
+                    check_interval = 300000
+                
+                self.after(check_interval, self.check_prayer_alerts)
             else:
-                self.after(6000000, self.check_prayer_alerts)
+                # No prayer times available, check again in 5 minutes
+                logger.warning("No upcoming prayer times found, rechecking in 5 minutes")
+                self.after(300000, self.check_prayer_alerts)
         except Exception as e:
             logger.error(f"Error scheduling prayer alert checks: {e}")
-            self.after(12000000, self.check_prayer_alerts)
+            self.after(60000, self.check_prayer_alerts)
 
     def alert_user(self, prayer):
         """Play alert sounds for prayer notification."""
-        def play_with_wait(path):
-            if not os.path.exists(path):
-                logger.warning(f"❌ Audio file not found: {path}")
-                return False
+        logger.info(f"🔔 Starting alert sequence for {prayer} prayer")
+        
+        dua_path = str(core.PROJECT_ROOT / "src/assets/dua.wav")
+        if prayer == "Fajr":
+            athan_path = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
+        else:
+            athan_path = str(core.PROJECT_ROOT / "src/assets/athan.wav")
+        
+        # Schedule audio playback in main thread using after()
+        self.play_alert_audio(athan_path, dua_path)
+
+    def play_alert_audio(self, athan_path, dua_path):
+        """Play audio files sequentially in the main thread (thread-safe)."""
+        if not os.path.exists(athan_path):
+            logger.warning(f"❌ Athan file not found: {athan_path}")
+            return
+        
+        try:
+            logger.info(f"🔊 Playing athan: {athan_path}")
+            pygame.mixer.music.load(athan_path)
+            pygame.mixer.music.play()
             
-            try:
-                logger.info(f"🔊 Loading audio: {path}")
-                pygame.mixer.music.load(path)
-                pygame.mixer.music.play()
-                
-                while pygame.mixer.music.get_busy():
-                    pygame.time.Clock().tick(10)
-                
-                logger.info(f"✅ Successfully played: {path}")
-                return True
-            except pygame.error as e:
-                logger.error(f"❌ Pygame error playing {path}: {e}")
-                return False
-            except Exception as e:
-                logger.error(f"❌ Error playing audio {path}: {e}")
-                return False
-
-        def play_sequence(first_path, second_path):
-            logger.info(f"🎵 Starting audio sequence for prayer alert")
-            success1 = play_with_wait(first_path)
-            success2 = play_with_wait(second_path)
-            if success1 and success2:
-                logger.info(f"✅ Audio sequence completed successfully")
-
-        if prayer in self.PRAYERS:
-            dua_path = core.PROJECT_ROOT / "src/assets/dua.wav"
-            if prayer == "Fajr":
-                athan_path = core.PROJECT_ROOT / "src/assets/fajr_athan.wav"
-            else:
-                athan_path = core.PROJECT_ROOT / "src/assets/athan.wav"
-
-            logger.info(f"🔔 Alert triggered for {prayer} prayer")
+            # Get duration to schedule next audio
+            audio_length = pygame.mixer.Sound(athan_path).get_length()
+            delay_ms = int(audio_length * 1000) + 500  # Add 500ms buffer
             
-            threading.Thread(target=play_sequence, args=(athan_path, dua_path), 
-                           daemon=True).start()
+            # Schedule dua playback after athan finishes
+            self.after(delay_ms, lambda: self.play_dua_audio(dua_path))
+            logger.info(f"✅ Athan scheduled (duration: {audio_length:.1f}s)")
+            
+        except pygame.error as e:
+            logger.error(f"❌ Pygame error loading athan: {e}")
+        except Exception as e:
+            logger.error(f"❌ Error playing athan: {e}")
+
+    def play_dua_audio(self, dua_path):
+        """Play dua audio file."""
+        if not os.path.exists(dua_path):
+            logger.warning(f"❌ Dua file not found: {dua_path}")
+            return
+        
+        try:
+            logger.info(f"🔊 Playing dua: {dua_path}")
+            pygame.mixer.music.load(dua_path)
+            pygame.mixer.music.play()
+            logger.info(f"✅ Dua playing")
+            
+        except pygame.error as e:
+            logger.error(f"❌ Pygame error loading dua: {e}")
+        except Exception as e:
+            logger.error(f"❌ Error playing dua: {e}")
 
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight."""
@@ -609,6 +636,11 @@ class MainWindow(tk.Tk):
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         
+        # Load prayer data asynchronously to avoid UI freeze
+        threading.Thread(target=self.check_and_ensure_tomorrow_data,
+                        args=(self.city_var.get(), self.country_var.get()),
+                        daemon=True).start()
+        
         self.update_analog_clock()
         self.update_clock()
         self.schedule_midnight_update()
@@ -708,7 +740,7 @@ class MainWindow(tk.Tk):
         self.gregorian_label.config(text=date_str)
         
         times = core.get_prayer_times_from_db(date, self.city_var.get())
-        if times:
+        if times and times.get("hijri_date"):
             hijri_date = times.get("hijri_date")
             hijri_date_parts = hijri_date.split("-")
             month_number = int(hijri_date_parts[1])
@@ -720,7 +752,11 @@ class MainWindow(tk.Tk):
 
     def on_country_change_menu(self):
         """Handle country selection change."""
-        cities = COUNTRY_CITIES[self.country_var.get()]
+        country = self.country_var.get()
+        if country not in COUNTRY_CITIES:
+            logger.warning(f"Invalid country selected: {country}")
+            return
+        cities = COUNTRY_CITIES[country]
         self.city_var.set(cities[0])
         self.menu.update_city_menu()
         self.update_prayer_frame_location()
@@ -761,11 +797,13 @@ class MainWindow(tk.Tk):
                 font=("Segoe UI", sizes["next_prayer"], "bold"))
             
             for prayer in self.prayer_frame.PRAYERS:
-                prayer_name_label = self.prayer_frame.prayer_frames[prayer].winfo_children()[0]
-                prayer_time_label = self.prayer_frame.labels[prayer]
-                
-                prayer_name_label.config(font=("Segoe UI", sizes["prayer_name"], "bold"))
-                prayer_time_label.config(font=("Segoe UI", sizes["prayer_time"]))
+                # Get prayer name label from frame (first widget is name, second is time)
+                frame_children = self.prayer_frame.prayer_frames[prayer].winfo_children()
+                if len(frame_children) >= 2:
+                    prayer_name_label = frame_children[0]
+                    prayer_time_label = self.prayer_frame.labels[prayer]
+                    prayer_name_label.config(font=("Segoe UI", sizes["prayer_name"], "bold"))
+                    prayer_time_label.config(font=("Segoe UI", sizes["prayer_time"]))
             
             logger.info(f"Font sizes applied: {self.font_size}")
         except Exception as e:
