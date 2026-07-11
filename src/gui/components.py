@@ -221,7 +221,16 @@ class PrayerTimesFrame(tk.Frame):
         # Black background to allow parent's background image to show
         super().__init__(master, bg="#000000")
         self.date = date
-        pygame.mixer.init()  # Initialize mixer once
+        
+        # Initialize pygame mixer with proper settings
+        try:
+            pygame.mixer.quit()  # Quit first in case already initialized
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            pygame.mixer.music.set_volume(1.0)  # Set volume to maximum
+            logger.info("Pygame mixer initialized successfully for prayer alerts")
+            self._test_audio_files()  # Verify audio files exist
+        except Exception as e:
+            logger.error(f"Failed to initialize pygame mixer: {e}")
         
         # Try IP geolocation if location not provided
         if location is None:
@@ -260,6 +269,27 @@ class PrayerTimesFrame(tk.Frame):
         # self.configure(padx=10, pady=10)
 
         self.update_clock()
+
+    def _test_audio_files(self):
+        """Test that all required audio files exist."""
+        audio_files = [
+            ("Dua", PROJECT_ROOT / "src/assets/dua.wav"),
+            ("Fajr Athan", PROJECT_ROOT / "src/assets/fajr_athan.wav"),
+            ("Regular Athan", PROJECT_ROOT / "src/assets/athan.wav")
+        ]
+        
+        all_exist = True
+        for name, path in audio_files:
+            if os.path.exists(path):
+                logger.info(f"✅ {name} audio file found: {path}")
+            else:
+                logger.error(f"❌ {name} audio file MISSING: {path}")
+                all_exist = False
+        
+        if all_exist:
+            logger.info("✅ All audio files verified - prayer alerts ready")
+        else:
+            logger.warning("⚠️ Some audio files missing - prayer alerts may not work")
 
     def _init_labels(self):
         """Initialize and layout all prayer time label widgets."""
@@ -446,9 +476,12 @@ class PrayerTimesFrame(tk.Frame):
                     min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
+                # Trigger alert when within 30 seconds of prayer time
                 if 0 <= seconds_until < 30 and prayer not in self.alerted_prayers:
+                    logger.info(f"🔔 Prayer alert triggered for {prayer} (in {int(seconds_until)} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
+                    logger.info(f"✅ {prayer} added to alerted prayers: {self.alerted_prayers}")
             except ValueError as e:
                 logger.warning(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
@@ -456,7 +489,8 @@ class PrayerTimesFrame(tk.Frame):
                 logger.error(f"Unexpected error checking alerts for {prayer}: {e}")
                 continue
         
-        logger.debug(f"Next prayer to alert: {next_prayer_to_alert} in {min_delta} seconds")
+        if min_delta:
+            logger.debug(f"Next prayer to alert: {next_prayer_to_alert} in {int(min_delta)} seconds")
         
         # Schedule next check based on how soon the next prayer is
         CHECK_INTERVALS = [
@@ -492,24 +526,36 @@ class PrayerTimesFrame(tk.Frame):
         def play_with_wait(path):
             """Load and play audio file, wait for completion."""
             if not os.path.exists(path):
-                logger.warning(f"Audio file not found: {path}")
-                return
+                logger.warning(f"❌ Audio file not found: {path}")
+                return False
             
             try:
+                logger.info(f"🔊 Loading audio: {path}")
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.play()
+                
+                # Wait for playback to complete
                 while pygame.mixer.music.get_busy():
                     pygame.time.Clock().tick(10)
-                logger.debug(f"Successfully played: {path}")
+                
+                logger.info(f"✅ Successfully played: {path}")
+                return True
             except pygame.error as e:
-                logger.error(f"Pygame error playing {path}: {e}")
+                logger.error(f"❌ Pygame error playing {path}: {e}")
+                return False
             except Exception as e:
-                logger.error(f"Error playing audio {path}: {e}")
+                logger.error(f"❌ Error playing audio {path}: {e}")
+                return False
 
         def play_sequence(first_path, second_path):
             """Play two audio files in sequence."""
-            play_with_wait(first_path)
-            play_with_wait(second_path)
+            logger.info(f"🎵 Starting audio sequence for prayer alert")
+            success1 = play_with_wait(first_path)
+            success2 = play_with_wait(second_path)
+            if success1 and success2:
+                logger.info(f"✅ Audio sequence completed successfully")
+            else:
+                logger.warning(f"⚠️ Audio sequence completed with errors")
 
         if prayer in self.PRAYERS:
             dua_path = PROJECT_ROOT / "src/assets/dua.wav"
@@ -518,7 +564,11 @@ class PrayerTimesFrame(tk.Frame):
             else:
                 athan_path = PROJECT_ROOT / "src/assets/athan.wav"
 
-            logger.info(f"Alert triggered for {prayer}")
+            logger.info(f"🔔 Alert triggered for {prayer} prayer")
+            logger.info(f"📂 Athan file: {athan_path}")
+            logger.info(f"📂 Dua file: {dua_path}")
+            
+            # Run in background thread to avoid blocking UI
             threading.Thread(
                 target=play_sequence,
                 args=(athan_path, dua_path),
