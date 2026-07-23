@@ -631,6 +631,46 @@ def check_for_updates():
 # HELPER FUNCTIONS
 # =====================================================================
 
+def save_settings(settings):
+    """Save settings to JSON file in data cache."""
+    try:
+        import json
+        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        logger.info(f"Settings saved to {SETTINGS_FILE}")
+    except Exception as e:
+        logger.error(f"Failed to save settings: {e}", exc_info=True)
+
+
+def load_settings():
+    """Load settings from JSON cache, return defaults if not found."""
+    try:
+        import json
+        if SETTINGS_FILE.exists():
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            logger.info(f"Settings loaded from {SETTINGS_FILE}")
+            return settings
+    except json.JSONDecodeError:
+        logger.warning(f"Settings file corrupted, using defaults")
+    except Exception as e:
+        logger.warning(f"Failed to load settings: {e}, using defaults")
+    
+    # Return default settings
+    return {
+        "country": DEFAULT_COUNTRY,
+        "city": DEFAULT_CITY,
+        "method": API_METHOD,
+        "school": API_SCHOOL,
+        "font_size": DEFAULT_FONT_SIZE,
+        "volume": 1.0,
+        "athan_file": str(PROJECT_ROOT / "src/assets/athan.wav"),
+        "dua_file": str(PROJECT_ROOT / "src/assets/dua.wav"),
+        "alert_threshold": ALERT_THRESHOLD_SECONDS,
+        "prayer_alerts": {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
+    }
+
+
 def calculate_prayer_times(date, location):
     """Calculate prayer times for a given date and location."""
     city = location.get("city", "")

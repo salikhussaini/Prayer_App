@@ -100,3 +100,5 @@ docs/_build/
 *.env
 .env.local
 .env.*.local
+
+audio_settings_code.txt
