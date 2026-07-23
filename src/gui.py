@@ -69,7 +69,8 @@ class SettingsDialog(simpledialog.Dialog):
     
     def __init__(self, parent, title, country_cities, current_country, current_city, 
                  current_method, current_school, current_font_size=None, current_volume=1.0,
-                 current_window_state=None, current_start_minimized=False):
+                 current_window_state=None, current_start_minimized=False, current_alert_threshold=None,
+                 current_prayer_alerts=None, current_athan_file=None, current_dua_file=None):
         self.country_cities = country_cities
         self.current_country = current_country
         self.current_city = current_city
@@ -79,11 +80,15 @@ class SettingsDialog(simpledialog.Dialog):
         self.current_school = current_school
         self.current_font_size = current_font_size or core.DEFAULT_FONT_SIZE
         self.current_volume = current_volume
-        self.athan_file = str(core.PROJECT_ROOT / "src/assets/athan.wav")
+        self.athan_file = current_athan_file or str(core.PROJECT_ROOT / "src/assets/athan.wav")
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
-        self.dua_file = str(core.PROJECT_ROOT / "src/assets/dua.wav")
+        self.dua_file = current_dua_file or str(core.PROJECT_ROOT / "src/assets/dua.wav")
         self.current_window_state = current_window_state or core.DEFAULT_WINDOW_STATE
         self.current_start_minimized = current_start_minimized
+        self.current_alert_threshold = current_alert_threshold or core.ALERT_THRESHOLD_SECONDS
+        self.current_prayer_alerts = current_prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
+        self.data_retention_days = core.load_settings().get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
+        self.parent_window = parent
         
         self.result = None
         super().__init__(parent, title)
@@ -109,6 +114,12 @@ class SettingsDialog(simpledialog.Dialog):
         
         # Tab 6: Window Settings
         self.create_window_tab(notebook)
+        
+        # Tab 7: Data Management
+        self.create_data_management_tab(notebook)
+        
+        # Tab 8: About
+        self.create_about_tab(notebook)
         
         return self.method_combo
     
@@ -216,13 +227,13 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Label(audio_frame, text="Custom Audio Files:").grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
         tk.Label(audio_frame, text="Athan File:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
         tk.Button(audio_frame, text="Browse...", command=self.select_athan_file, width=15).grid(row=4, column=1, sticky="w", padx=5, pady=5)
-        self.athan_path_label = tk.Label(audio_frame, text=self.athan_file, font=("Segoe UI", 8), fg="#666666")
-        self.athan_path_label.grid(row=4, column=1, sticky="e", padx=5, pady=5)
+        self.athan_file_display = tk.Label(audio_frame, text=os.path.basename(self.athan_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
+        self.athan_file_display.grid(row=4, column=1, sticky="e", padx=5, pady=5)
         
         tk.Label(audio_frame, text="Dua File:").grid(row=5, column=0, sticky="w", padx=5, pady=5)
         tk.Button(audio_frame, text="Browse...", command=self.select_dua_file, width=15).grid(row=5, column=1, sticky="w", padx=5, pady=5)
-        self.dua_path_label = tk.Label(audio_frame, text=self.dua_file, font=("Segoe UI", 8), fg="#666666")
-        self.dua_path_label.grid(row=5, column=1, sticky="e", padx=5, pady=5)
+        self.dua_file_display = tk.Label(audio_frame, text=os.path.basename(self.dua_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
+        self.dua_file_display.grid(row=5, column=1, sticky="e", padx=5, pady=5)
         
         audio_frame.grid_columnconfigure(1, weight=1)
     
@@ -232,7 +243,7 @@ class SettingsDialog(simpledialog.Dialog):
         notebook.add(notif_frame, text="Notifications")
         
         tk.Label(notif_frame, text="Alert Threshold (seconds before prayer):").grid(row=0, column=0, sticky="w", padx=5, pady=10)
-        self.alert_threshold_var = tk.IntVar(value=core.ALERT_THRESHOLD_SECONDS)
+        self.alert_threshold_var = tk.IntVar(value=self.current_alert_threshold)
         threshold_spin = ttk.Spinbox(notif_frame, from_=5, to=300, textvariable=self.alert_threshold_var, width=10)
         threshold_spin.grid(row=0, column=1, sticky="w", padx=5, pady=10)
         
@@ -241,7 +252,7 @@ class SettingsDialog(simpledialog.Dialog):
         self.prayer_alerts = {}
         prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
         for idx, prayer in enumerate(prayers):
-            self.prayer_alerts[prayer] = tk.BooleanVar(value=True)
+            self.prayer_alerts[prayer] = tk.BooleanVar(value=self.current_prayer_alerts.get(prayer, True))
             tk.Checkbutton(notif_frame, text=prayer, variable=self.prayer_alerts[prayer]).grid(row=2+idx, column=0, sticky="w", padx=10, pady=3)
     
     def create_window_tab(self, notebook):
@@ -261,6 +272,118 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Checkbutton(window_frame, text="Start minimized to system tray", 
                       variable=self.start_minimized_var).grid(row=2, column=0, columnspan=2, 
                                                               sticky="w", padx=10, pady=3)
+    
+    def create_data_management_tab(self, notebook):
+        """Create Data Management tab."""
+        data_frame = ttk.Frame(notebook)
+        notebook.add(data_frame, text="Data Management")
+        
+        # Data Retention Setting
+        tk.Label(data_frame, text="Auto-Cleanup Settings:", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 15))
+        
+        tk.Label(data_frame, text="Keep prayer data for (days):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        self.data_retention_var = tk.IntVar(value=self.data_retention_days)
+        retention_spin = ttk.Spinbox(data_frame, from_=7, to=365, textvariable=self.data_retention_var, width=10)
+        retention_spin.grid(row=1, column=1, sticky="w", padx=10, pady=5)
+        
+        tk.Label(data_frame, text="Old data is automatically deleted on startup", font=("Segoe UI", 8), fg="#888888").grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 15))
+        
+        # Database Statistics
+        tk.Label(data_frame, text="Database Statistics:", font=("Segoe UI", 10, "bold")).grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
+        
+        try:
+            stats = core.get_prayer_data_stats()
+            stats_text = f"Total Records: {stats.get('total_records', 0)}\n"
+            stats_text += f"Unique Cities: {stats.get('unique_cities', 0)}\n"
+            stats_text += f"Data Range: {stats.get('earliest_date', 'N/A')} to {stats.get('latest_date', 'N/A')}\n"
+            stats_text += f"Database Size: {stats.get('database_size_mb', 0)} MB"
+            
+            stats_label = tk.Label(data_frame, text=stats_text, font=("Segoe UI", 9), fg="#00FF99", justify="left")
+            stats_label.grid(row=4, column=0, columnspan=2, sticky="nw", padx=10, pady=10)
+        except Exception as e:
+            tk.Label(data_frame, text=f"Error loading statistics: {str(e)}", font=("Segoe UI", 9), fg="#FF5555").grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=10)
+        
+        # Manual Actions
+        tk.Label(data_frame, text="Manual Actions:", font=("Segoe UI", 10, "bold")).grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
+        
+        button_frame = tk.Frame(data_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        tk.Button(button_frame, text="Clean Old Data Now", command=self.cleanup_old_data, width=20).pack(side="left", padx=3)
+        tk.Button(button_frame, text="Clear All Data", command=self.clear_all_data, width=20).pack(side="left", padx=3)
+    
+    def cleanup_old_data(self):
+        """Clean up old prayer data."""
+        try:
+            retention_days = self.data_retention_var.get()
+            deleted = core.cleanup_old_prayer_data(retention_days)
+            messagebox.showinfo("Success", f"Cleaned up {deleted} old prayer records.")
+            logger.info(f"User manually triggered cleanup: {deleted} records deleted")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to clean up data: {str(e)}")
+            logger.error(f"Error cleaning data: {e}")
+    
+    def clear_all_data(self):
+        """Clear all prayer data with confirmation."""
+        if messagebox.askyesno("Confirm", "Delete ALL stored prayer data? This cannot be undone."):
+            try:
+                deleted = core.clear_all_prayer_data()
+                messagebox.showinfo("Success", f"Deleted {deleted} prayer records.")
+                logger.info(f"User manually cleared all prayer data: {deleted} records deleted")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to clear data: {str(e)}")
+                logger.error(f"Error clearing data: {e}")
+    
+    def create_about_tab(self, notebook):
+        """Create About tab showing current settings."""
+        about_frame = ttk.Frame(notebook)
+        notebook.add(about_frame, text="About")
+        
+        # App info
+        tk.Label(about_frame, text="Prayer Times App", font=("Segoe UI", 14, "bold"), fg="#00FF99").grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
+        tk.Label(about_frame, text="Version 1.0", font=("Segoe UI", 9), fg="#888888").grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 20))
+        
+        # Current Settings Summary
+        tk.Label(about_frame, text="Current Settings:", font=("Segoe UI", 11, "bold")).grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 10))
+        
+        # Location
+        location_text = f"📍 Location: {self.current_city}, {self.current_country}"
+        tk.Label(about_frame, text=location_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=3, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # API Settings
+        method_name = core.API_CALCULATION_METHODS.get(self.current_method, "Unknown")
+        school_name = core.API_SCHOOLS.get(self.current_school, "Unknown")
+        api_text = f"⚙️ API: {method_name} | {school_name}"
+        tk.Label(about_frame, text=api_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=4, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Display
+        display_text = f"🖥️ Display: {self.current_font_size} font size"
+        tk.Label(about_frame, text=display_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=5, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Audio
+        volume_percent = int(self.current_volume * 100)
+        audio_text = f"🔊 Audio: Volume {volume_percent}%"
+        tk.Label(about_frame, text=audio_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=6, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Notifications
+        enabled_prayers = [prayer for prayer, enabled in self.current_prayer_alerts.items() if enabled]
+        prayers_text = ", ".join(enabled_prayers) if enabled_prayers else "None"
+        notif_text = f"🔔 Alerts: {self.current_alert_threshold}s before | Prayers: {prayers_text}"
+        tk.Label(about_frame, text=notif_text, font=("Segoe UI", 9), fg="#00FF99", wraplength=450, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Window
+        window_text = f"🪟 Window: {self.current_window_state}"
+        if self.current_start_minimized:
+            window_text += " | Start minimized"
+        tk.Label(about_frame, text=window_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=8, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Data Management
+        data_text = f"💾 Data: Keep {self.data_retention_days} days"
+        tk.Label(about_frame, text=data_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=9, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        
+        # Credits
+        tk.Label(about_frame, text="Credits:", font=("Segoe UI", 11, "bold")).grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=(20, 10))
+        tk.Label(about_frame, text="Powered by Aladhan API", font=("Segoe UI", 9), fg="#888888").grid(row=11, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text="© 2026 Prayer Times App", font=("Segoe UI", 9), fg="#888888").grid(row=12, column=0, columnspan=2, sticky="w", padx=20, pady=2)
     
     def update_volume_label(self, value):
         """Update volume percentage label."""
@@ -300,7 +423,7 @@ class SettingsDialog(simpledialog.Dialog):
         file_path = filedialog.askopenfilename(title="Select Athan Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
         if file_path:
             self.athan_file = file_path
-            self.athan_path_label.config(text=os.path.basename(file_path))
+            self.athan_file_display.config(text=os.path.basename(file_path))
     
     def select_dua_file(self):
         """Select custom dua audio file."""
@@ -308,7 +431,7 @@ class SettingsDialog(simpledialog.Dialog):
         file_path = filedialog.askopenfilename(title="Select Dua Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
         if file_path:
             self.dua_file = file_path
-            self.dua_path_label.config(text=os.path.basename(file_path))
+            self.dua_file_display.config(text=os.path.basename(file_path))
     
     def apply(self):
         """Apply all settings and prepare result."""
@@ -333,8 +456,50 @@ class SettingsDialog(simpledialog.Dialog):
             "alert_threshold": self.alert_threshold_var.get(),
             "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()},
             "window_state": self.window_state_var.get(),
-            "start_minimized": self.start_minimized_var.get()
+            "start_minimized": self.start_minimized_var.get(),
+            "data_retention_days": self.data_retention_var.get()
         }
+
+    def buttonbox(self):
+        """Override buttonbox to add Refresh Prayer Times button."""
+        box = tk.Frame(self)
+        box.pack(side="bottom", fill="x", expand=False, padx=5, pady=5)
+        
+        refresh_btn = tk.Button(box, text="Refresh Prayer Times", command=self.refresh_prayer_times, width=20)
+        refresh_btn.pack(side="left", padx=5)
+        
+        ok_btn = tk.Button(box, text="OK", command=self.ok, width=10, default="active")
+        ok_btn.pack(side="left", padx=5)
+        
+        cancel_btn = tk.Button(box, text="Cancel", command=self.cancel, width=10)
+        cancel_btn.pack(side="left", padx=5)
+        
+        self.bind("<Return>", lambda e: self.ok())
+        self.bind("<Escape>", lambda e: self.cancel())
+
+    def refresh_prayer_times(self):
+        """Refresh prayer times for the selected city."""
+        try:
+            selection = self.city_listbox.curselection()
+            country = self.country_var.get()
+            cities = self.country_cities.get(country, [])
+            city = cities[selection[0]] if selection else cities[0]
+            
+            messagebox.showinfo("Refreshing", f"Fetching prayer times for {city}...\nPlease wait.")
+            
+            # Fetch fresh data
+            threading.Thread(
+                target=core.ensure_future_data,
+                args=(city, country),
+                kwargs={"days": 30},
+                daemon=True
+            ).start()
+            
+            messagebox.showinfo("Success", f"Prayer times refresh started for {city}.")
+            logger.info(f"Initiated prayer times refresh for {city}, {country}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh prayer times: {str(e)}")
+            logger.error(f"Error refreshing prayer times: {e}")
 
 
 def show_error(message):
@@ -366,6 +531,8 @@ class PrayerMenu:
         file_menu = tk.Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(label="File", menu=file_menu)
 
+        file_menu.add_command(label="Refresh Prayer Times", command=self.refresh_prayer_times)
+        file_menu.add_separator()
         file_menu.add_command(label="About", command=self.show_about)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=on_exit)
@@ -378,6 +545,27 @@ class PrayerMenu:
         # Delegate to the on_settings callback which is handled by MainWindow
         if callable(self.on_settings):
             self.on_settings()
+
+    def refresh_prayer_times(self):
+        """Refresh prayer times for the current city."""
+        try:
+            city = self.city_var.get()
+            country = self.country_var.get()
+            messagebox.showinfo("Refreshing", f"Fetching prayer times for {city}...\nPlease wait.")
+            
+            # Fetch fresh data in background
+            threading.Thread(
+                target=core.ensure_future_data,
+                args=(city, country),
+                kwargs={"days": 30},
+                daemon=True
+            ).start()
+            
+            messagebox.showinfo("Success", f"Prayer times refresh started for {city}.")
+            logger.info(f"Initiated prayer times refresh for {city}, {country}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh prayer times: {str(e)}")
+            logger.error(f"Error refreshing prayer times: {e}")
 
     def show_about(self):
         """Show about dialog."""
@@ -766,6 +954,16 @@ class MainWindow(tk.Tk):
         # Load settings from cache
         saved_settings = core.load_settings()
         
+        # Start periodic cleanup of old prayer data
+        data_retention_days = saved_settings.get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
+        try:
+            # Initial cleanup on startup
+            threading.Thread(target=core.cleanup_old_prayer_data, args=(data_retention_days,), daemon=True).start()
+            # Schedule periodic cleanup every 24 hours
+            core.schedule_periodic_cleanup(data_retention_days, check_interval_hours=24)
+        except Exception as e:
+            logger.error(f"Error setting up data cleanup: {e}")
+        
         self.configure(bg=self.BG_COLOR)
         self.title("Prayer Times")
         
@@ -792,8 +990,7 @@ class MainWindow(tk.Tk):
         self.window_state = saved_settings["window_state"]
         self.start_minimized = saved_settings["start_minimized"]
         self.window_geometry = saved_settings["window_geometry"]
-
-        self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
+        self.data_retention_days = data_retention_days
         
         self.menu = PrayerMenu(
             self, self.country_var, self.city_var, COUNTRY_CITIES,
@@ -840,6 +1037,9 @@ class MainWindow(tk.Tk):
             location={"city": self.city_var.get(), "country": self.country_var.get()}
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
+        
+        # Apply saved audio volume to pygame
+        pygame.mixer.music.set_volume(self.audio_volume)
         
         # Load prayer data asynchronously to avoid UI freeze
         threading.Thread(target=self.check_and_ensure_tomorrow_data,
@@ -971,7 +1171,9 @@ class MainWindow(tk.Tk):
                                self.country_var.get(), self.city_var.get(),
                                self.api_method, self.api_school, 
                                self.font_size, self.audio_volume,
-                               self.window_state, self.start_minimized)
+                               self.window_state, self.start_minimized,
+                               self.alert_threshold, self.prayer_alerts,
+                               self.athan_file, self.dua_file)
         if dialog.result:
             try:
                 # Update location
@@ -998,6 +1200,9 @@ class MainWindow(tk.Tk):
                 self.window_state = dialog.result["window_state"]
                 self.start_minimized = dialog.result["start_minimized"]
                 
+                # Update data management
+                self.data_retention_days = dialog.result["data_retention_days"]
+                
                 core.API_METHOD = self.api_method
                 core.API_SCHOOL = self.api_school
                 core.ALERT_THRESHOLD_SECONDS = self.alert_threshold
@@ -1009,7 +1214,8 @@ class MainWindow(tk.Tk):
                           f"School={self.api_school}, Font Size={self.font_size}, "
                           f"Volume={int(self.audio_volume * 100)}%, "
                           f"Alert Threshold={self.alert_threshold}s, "
-                          f"Window State={self.window_state}, Start Minimized={self.start_minimized}")
+                          f"Window State={self.window_state}, Start Minimized={self.start_minimized}, "
+                          f"Data Retention={self.data_retention_days}d")
                 
                 # Get current window geometry
                 window_geometry, current_state = self.save_window_state()
@@ -1028,11 +1234,13 @@ class MainWindow(tk.Tk):
                     "prayer_alerts": self.prayer_alerts,
                     "window_state": self.window_state,
                     "start_minimized": self.start_minimized,
-                    "window_geometry": window_geometry
+                    "window_geometry": window_geometry,
+                    "data_retention_days": self.data_retention_days
                 })
                 
                 self.prayer_frame.on_location_change()
                 self.apply_font_sizes()
+                self.apply_window_state()
                 self.refresh_prayer_times()
             except Exception as e:
                 logger.error(f"Error applying settings: {e}", exc_info=True)

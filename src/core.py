@@ -8,6 +8,7 @@ import requests
 import logging
 import logging.handlers
 import time
+import threading
 import os
 import subprocess
 import platform
@@ -15,6 +16,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from datetime import datetime, timedelta, date
 import re
+import json
 
 
 # =====================================================================
@@ -87,6 +89,9 @@ DEFAULT_FONT_SIZE = "Medium"
 DEFAULT_WINDOW_STATE = "windowed"  # Options: windowed, maximized, fullscreen
 DEFAULT_START_MINIMIZED = False
 DEFAULT_WINDOW_GEOMETRY = None  # Will be set at runtime
+
+# Data Management
+DEFAULT_DATA_RETENTION_DAYS = 30  # Automatically clean up data older than this
 
 class Colors:
     BACKGROUND = "#000000"
@@ -292,6 +297,113 @@ def get_prayer_times_range_from_db(start_date, end_date, city):
                 "Maghrib": row[4], "Isha": row[5]
             }
     return result
+
+
+def cleanup_old_prayer_data(retention_days=DEFAULT_DATA_RETENTION_DAYS):
+    """Delete prayer data older than retention_days."""
+    try:
+        cutoff_date = (datetime.now() - timedelta(days=retention_days)).strftime("%Y-%m-%d")
+        
+        with _db_manager.get_cursor() as cursor:
+            cursor.execute("DELETE FROM prayer_times WHERE date < ?", (cutoff_date,))
+            deleted_count = cursor.rowcount
+        
+        if deleted_count > 0:
+            logger.info(f"✅ Cleaned up {deleted_count} old prayer records (older than {retention_days} days)")
+        else:
+            logger.debug(f"No old prayer records to clean (retention: {retention_days} days)")
+        
+        return deleted_count
+    except Exception as e:
+        logger.error(f"Error cleaning up old prayer data: {e}")
+        raise
+
+
+def get_database_size():
+    """Get current database size in MB."""
+    try:
+        db_path = Path(DB_PATH)
+        if db_path.exists():
+            size_bytes = db_path.stat().st_size
+            size_mb = size_bytes / (1024 * 1024)
+            return round(size_mb, 2)
+    except Exception as e:
+        logger.error(f"Error getting database size: {e}")
+    return 0
+
+
+def clear_all_prayer_data():
+    """Completely clear all prayer data from database."""
+    try:
+        with _db_manager.get_cursor() as cursor:
+            cursor.execute("DELETE FROM prayer_times")
+            deleted_count = cursor.rowcount
+        
+        logger.info(f"✅ Cleared all prayer data ({deleted_count} records deleted)")
+        return deleted_count
+    except Exception as e:
+        logger.error(f"Error clearing prayer data: {e}")
+        raise
+
+
+def get_prayer_data_stats():
+    """Get statistics about stored prayer data."""
+    try:
+        with _db_manager.get_cursor() as cursor:
+            # Total records
+            cursor.execute("SELECT COUNT(*) FROM prayer_times")
+            total_records = cursor.fetchone()[0]
+            
+            # Unique cities
+            cursor.execute("SELECT COUNT(DISTINCT city) FROM prayer_times")
+            unique_cities = cursor.fetchone()[0]
+            
+            # Date range
+            cursor.execute("SELECT MIN(date), MAX(date) FROM prayer_times")
+            result = cursor.fetchone()
+            earliest_date = result[0] if result[0] else "N/A"
+            latest_date = result[1] if result[1] else "N/A"
+        
+        return {
+            "total_records": total_records,
+            "unique_cities": unique_cities,
+            "earliest_date": earliest_date,
+            "latest_date": latest_date,
+            "database_size_mb": get_database_size()
+        }
+    except Exception as e:
+        logger.error(f"Error getting prayer data stats: {e}")
+        return {}
+
+
+def schedule_periodic_cleanup(retention_days=DEFAULT_DATA_RETENTION_DAYS, check_interval_hours=24):
+    """Schedule periodic cleanup of old prayer data.
+    
+    Args:
+        retention_days: Days to keep data before deletion
+        check_interval_hours: Hours between cleanup checks (default 24)
+    
+    Note: This runs in a daemon thread and will continue until app exits.
+    """
+    def cleanup_loop():
+        logger.info(f"📋 Periodic cleanup scheduler started (runs every {check_interval_hours}h, keeps {retention_days}d)")
+        while True:
+            try:
+                # Sleep for specified interval
+                sleep_seconds = check_interval_hours * 3600
+                time.sleep(sleep_seconds)
+                
+                # Run cleanup
+                cleanup_old_prayer_data(retention_days)
+            except Exception as e:
+                logger.error(f"Error in periodic cleanup loop: {e}")
+                # Continue the loop even on error
+                time.sleep(60)
+    
+    # Start daemon thread for cleanup
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True, name="PrayerDataCleanupThread")
+    cleanup_thread.start()
+    logger.info("🧹 Prayer data periodic cleanup thread started")
 
 
 # =====================================================================
@@ -639,7 +751,6 @@ def check_for_updates():
 def save_settings(settings):
     """Save settings to JSON file in data cache."""
     try:
-        import json
         with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
         logger.info(f"Settings saved to {SETTINGS_FILE}")
@@ -663,11 +774,11 @@ def load_settings():
         "prayer_alerts": {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True},
         "window_state": DEFAULT_WINDOW_STATE,
         "start_minimized": DEFAULT_START_MINIMIZED,
-        "window_geometry": DEFAULT_WINDOW_GEOMETRY
+        "window_geometry": DEFAULT_WINDOW_GEOMETRY,
+        "data_retention_days": DEFAULT_DATA_RETENTION_DAYS
     }
     
     try:
-        import json
         if SETTINGS_FILE.exists():
             with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
