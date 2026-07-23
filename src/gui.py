@@ -68,7 +68,8 @@ class SettingsDialog(simpledialog.Dialog):
     """Unified settings dialog with tabs for Location, API, Display, Audio, and Notifications."""
     
     def __init__(self, parent, title, country_cities, current_country, current_city, 
-                 current_method, current_school, current_font_size=None, current_volume=1.0):
+                 current_method, current_school, current_font_size=None, current_volume=1.0,
+                 current_window_state=None, current_start_minimized=False):
         self.country_cities = country_cities
         self.current_country = current_country
         self.current_city = current_city
@@ -81,6 +82,8 @@ class SettingsDialog(simpledialog.Dialog):
         self.athan_file = str(core.PROJECT_ROOT / "src/assets/athan.wav")
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
         self.dua_file = str(core.PROJECT_ROOT / "src/assets/dua.wav")
+        self.current_window_state = current_window_state or core.DEFAULT_WINDOW_STATE
+        self.current_start_minimized = current_start_minimized
         
         self.result = None
         super().__init__(parent, title)
@@ -103,6 +106,9 @@ class SettingsDialog(simpledialog.Dialog):
         
         # Tab 5: Notifications
         self.create_notifications_tab(notebook)
+        
+        # Tab 6: Window Settings
+        self.create_window_tab(notebook)
         
         return self.method_combo
     
@@ -238,6 +244,24 @@ class SettingsDialog(simpledialog.Dialog):
             self.prayer_alerts[prayer] = tk.BooleanVar(value=True)
             tk.Checkbutton(notif_frame, text=prayer, variable=self.prayer_alerts[prayer]).grid(row=2+idx, column=0, sticky="w", padx=10, pady=3)
     
+    def create_window_tab(self, notebook):
+        """Create Window Settings tab."""
+        window_frame = ttk.Frame(notebook)
+        notebook.add(window_frame, text="Window")
+        
+        tk.Label(window_frame, text="Window State on Startup:").grid(row=0, column=0, sticky="w", padx=5, pady=10)
+        self.window_state_var = tk.StringVar(value=self.current_window_state)
+        window_state_combo = ttk.Combobox(window_frame, textvariable=self.window_state_var, 
+                                          values=["windowed", "maximized", "fullscreen"], 
+                                          width=40, state="readonly")
+        window_state_combo.grid(row=0, column=1, padx=5, pady=10)
+        
+        tk.Label(window_frame, text="Launch Settings:").grid(row=1, column=0, sticky="w", padx=5, pady=(20, 10))
+        self.start_minimized_var = tk.BooleanVar(value=self.current_start_minimized)
+        tk.Checkbutton(window_frame, text="Start minimized to system tray", 
+                      variable=self.start_minimized_var).grid(row=2, column=0, columnspan=2, 
+                                                              sticky="w", padx=10, pady=3)
+    
     def update_volume_label(self, value):
         """Update volume percentage label."""
         volume_percent = int(float(value) * 100)
@@ -307,7 +331,9 @@ class SettingsDialog(simpledialog.Dialog):
             "athan_file": self.athan_file,
             "dua_file": self.dua_file,
             "alert_threshold": self.alert_threshold_var.get(),
-            "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()}
+            "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()},
+            "window_state": self.window_state_var.get(),
+            "start_minimized": self.start_minimized_var.get()
         }
 
 
@@ -763,6 +789,9 @@ class MainWindow(tk.Tk):
         self.dua_file = saved_settings["dua_file"]
         self.alert_threshold = saved_settings["alert_threshold"]
         self.prayer_alerts = saved_settings["prayer_alerts"]
+        self.window_state = saved_settings["window_state"]
+        self.start_minimized = saved_settings["start_minimized"]
+        self.window_geometry = saved_settings["window_geometry"]
 
         self.check_and_ensure_tomorrow_data(self.city_var.get(), self.country_var.get())
         
@@ -771,6 +800,9 @@ class MainWindow(tk.Tk):
             self.on_country_change_menu, self.update_prayer_frame_location,
             self.quit, on_settings=self.open_settings
         )
+
+        # Apply window state
+        self.apply_window_state()
 
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -938,7 +970,8 @@ class MainWindow(tk.Tk):
         dialog = SettingsDialog(self, "Settings", COUNTRY_CITIES,
                                self.country_var.get(), self.city_var.get(),
                                self.api_method, self.api_school, 
-                               self.font_size, self.audio_volume)
+                               self.font_size, self.audio_volume,
+                               self.window_state, self.start_minimized)
         if dialog.result:
             try:
                 # Update location
@@ -957,9 +990,13 @@ class MainWindow(tk.Tk):
                 self.athan_file = dialog.result["athan_file"]
                 self.dua_file = dialog.result["dua_file"]
                 
-                # Update notifications (currently stored but not used yet)
+                # Update notifications
                 self.alert_threshold = dialog.result["alert_threshold"]
                 self.prayer_alerts = dialog.result["prayer_alerts"]
+                
+                # Update window settings
+                self.window_state = dialog.result["window_state"]
+                self.start_minimized = dialog.result["start_minimized"]
                 
                 core.API_METHOD = self.api_method
                 core.API_SCHOOL = self.api_school
@@ -971,7 +1008,11 @@ class MainWindow(tk.Tk):
                           f"City={dialog.result['city']}, Method={self.api_method}, "
                           f"School={self.api_school}, Font Size={self.font_size}, "
                           f"Volume={int(self.audio_volume * 100)}%, "
-                          f"Alert Threshold={self.alert_threshold}s")
+                          f"Alert Threshold={self.alert_threshold}s, "
+                          f"Window State={self.window_state}, Start Minimized={self.start_minimized}")
+                
+                # Get current window geometry
+                window_geometry, current_state = self.save_window_state()
                 
                 # Save settings to cache
                 core.save_settings({
@@ -984,7 +1025,10 @@ class MainWindow(tk.Tk):
                     "athan_file": self.athan_file,
                     "dua_file": self.dua_file,
                     "alert_threshold": self.alert_threshold,
-                    "prayer_alerts": self.prayer_alerts
+                    "prayer_alerts": self.prayer_alerts,
+                    "window_state": self.window_state,
+                    "start_minimized": self.start_minimized,
+                    "window_geometry": window_geometry
                 })
                 
                 self.prayer_frame.on_location_change()
@@ -1020,6 +1064,49 @@ class MainWindow(tk.Tk):
             logger.info(f"Font sizes applied: {self.font_size}")
         except Exception as e:
             logger.error(f"Error applying font sizes: {e}", exc_info=True)
+
+    def apply_window_state(self):
+        """Apply window state on startup (fullscreen, maximized, windowed)."""
+        try:
+            self.update_idletasks()  # Ensure window is fully initialized
+            
+            if self.window_state == "fullscreen":
+                self.state("zoomed")  # Windows fullscreen
+                logger.info("Window state set to fullscreen")
+            elif self.window_state == "maximized":
+                self.state("normal")
+                self.geometry(f"{self.winfo_screenwidth()}x{self.winfo_screenheight()}+0+0")
+                logger.info("Window state set to maximized")
+            else:  # windowed
+                self.state("normal")
+                logger.info("Window state set to windowed")
+            
+            # Handle start minimized option
+            if self.start_minimized:
+                self.withdraw()  # Hide window
+                logger.info("Window hidden (start minimized enabled)")
+            
+        except Exception as e:
+            logger.error(f"Error applying window state: {e}", exc_info=True)
+    
+    def save_window_state(self):
+        """Save current window state and geometry."""
+        try:
+            # Get current window geometry
+            geometry = self.geometry()
+            
+            # Determine current state
+            state = "windowed"
+            if self.state() == "zoomed":
+                state = "fullscreen"
+            elif self.winfo_width() == self.winfo_screenwidth():
+                state = "maximized"
+            
+            logger.debug(f"Saving window state: {state}, geometry: {geometry}")
+            return geometry, state
+        except Exception as e:
+            logger.error(f"Error saving window state: {e}", exc_info=True)
+            return None, "windowed"
 
     def update_prayer_frame_location(self):
         """Update prayer frame with new location."""

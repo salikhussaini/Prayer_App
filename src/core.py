@@ -83,6 +83,11 @@ FONT_SIZES = {
 }
 DEFAULT_FONT_SIZE = "Medium"
 
+# Window Configuration
+DEFAULT_WINDOW_STATE = "windowed"  # Options: windowed, maximized, fullscreen
+DEFAULT_START_MINIMIZED = False
+DEFAULT_WINDOW_GEOMETRY = None  # Will be set at runtime
+
 class Colors:
     BACKGROUND = "#000000"
     PRIMARY = "#006853"
@@ -667,7 +672,10 @@ def load_settings():
         "athan_file": str(PROJECT_ROOT / "src/assets/athan.wav"),
         "dua_file": str(PROJECT_ROOT / "src/assets/dua.wav"),
         "alert_threshold": ALERT_THRESHOLD_SECONDS,
-        "prayer_alerts": {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
+        "prayer_alerts": {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True},
+        "window_state": DEFAULT_WINDOW_STATE,
+        "start_minimized": DEFAULT_START_MINIMIZED,
+        "window_geometry": DEFAULT_WINDOW_GEOMETRY
     }
 
 
