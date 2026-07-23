@@ -649,20 +649,8 @@ def save_settings(settings):
 
 def load_settings():
     """Load settings from JSON cache, return defaults if not found."""
-    try:
-        import json
-        if SETTINGS_FILE.exists():
-            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-            logger.info(f"Settings loaded from {SETTINGS_FILE}")
-            return settings
-    except json.JSONDecodeError:
-        logger.warning(f"Settings file corrupted, using defaults")
-    except Exception as e:
-        logger.warning(f"Failed to load settings: {e}, using defaults")
-    
-    # Return default settings
-    return {
+    # Define defaults
+    defaults = {
         "country": DEFAULT_COUNTRY,
         "city": DEFAULT_CITY,
         "method": API_METHOD,
@@ -677,6 +665,22 @@ def load_settings():
         "start_minimized": DEFAULT_START_MINIMIZED,
         "window_geometry": DEFAULT_WINDOW_GEOMETRY
     }
+    
+    try:
+        import json
+        if SETTINGS_FILE.exists():
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            logger.info(f"Settings loaded from {SETTINGS_FILE}")
+            # Merge with defaults to ensure all keys are present
+            return {**defaults, **settings}
+    except json.JSONDecodeError:
+        logger.warning(f"Settings file corrupted, using defaults")
+    except Exception as e:
+        logger.warning(f"Failed to load settings: {e}, using defaults")
+    
+    # Return default settings
+    return defaults
 
 
 def calculate_prayer_times(date, location):
