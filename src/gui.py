@@ -70,7 +70,8 @@ class SettingsDialog(simpledialog.Dialog):
     def __init__(self, parent, title, country_cities, current_country, current_city, 
                  current_method, current_school, current_font_size=None, current_volume=1.0,
                  current_window_state=None, current_start_minimized=False, current_alert_threshold=None,
-                 current_prayer_alerts=None, current_athan_file=None, current_dua_file=None, current_show_weather=True):
+                 current_prayer_alerts=None, current_athan_file=None, current_dua_file=None, current_show_weather=True,
+                 current_custom_font_sizes=None, current_linux_max_volume=False):
         self.country_cities = country_cities
         self.current_country = current_country
         self.current_city = current_city
@@ -89,6 +90,14 @@ class SettingsDialog(simpledialog.Dialog):
         self.current_prayer_alerts = current_prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
         self.current_show_weather = current_show_weather
         self.data_retention_days = core.load_settings().get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
+        
+        # Initialize custom font sizes from preset or provided values
+        if current_custom_font_sizes is None:
+            self.custom_font_sizes = core.FONT_SIZES.get(self.current_font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE]).copy()
+        else:
+            self.custom_font_sizes = current_custom_font_sizes.copy()
+        
+        self.linux_max_volume = current_linux_max_volume
         self.parent_window = parent
         
         self.result = None
@@ -107,19 +116,22 @@ class SettingsDialog(simpledialog.Dialog):
         # Tab 3: Display
         self.create_display_tab(notebook)
         
-        # Tab 4: Audio Settings
+        # Tab 4: Text Sizes (NEW)
+        self.create_text_sizes_tab(notebook)
+        
+        # Tab 5: Audio Settings
         self.create_audio_tab(notebook)
         
-        # Tab 5: Notifications
+        # Tab 6: Notifications
         self.create_notifications_tab(notebook)
         
-        # Tab 6: Window Settings
+        # Tab 7: Window Settings
         self.create_window_tab(notebook)
         
-        # Tab 7: Data Management
+        # Tab 8: Data Management
         self.create_data_management_tab(notebook)
         
-        # Tab 8: About
+        # Tab 9: About
         self.create_about_tab(notebook)
         
         return self.method_combo
@@ -208,6 +220,66 @@ class SettingsDialog(simpledialog.Dialog):
                       variable=self.show_weather_var).grid(row=2, column=0, columnspan=2, 
                                                             sticky="w", padx=10, pady=5)
     
+    def create_text_sizes_tab(self, notebook):
+        """Create Text Sizes tab for customizing individual font sizes."""
+        sizes_frame = ttk.Frame(notebook)
+        notebook.add(sizes_frame, text="Text Sizes")
+        
+        tk.Label(sizes_frame, text="Customize Font Sizes:", font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 15))
+        
+        # Create spinboxes for each font element
+        self.font_size_spinboxes = {}
+        elements = [
+            ("Clock (24-hour display)", "clock", 50, 200),
+            ("Prayer Name", "prayer_name", 8, 40),
+            ("Prayer Time", "prayer_time", 8, 80),
+            ("Next Prayer Label", "next_prayer", 8, 80),
+            ("Date (Gregorian/Hijri)", "date", 8, 100),
+            ("Weather Info", "weather", 8, 60)
+        ]
+        
+        row = 1
+        for label, key, min_val, max_val in elements:
+            tk.Label(sizes_frame, text=label + ":").grid(row=row, column=0, sticky="w", padx=10, pady=5)
+            
+            spinbox_frame = tk.Frame(sizes_frame)
+            spinbox_frame.grid(row=row, column=1, sticky="ew", padx=10, pady=5)
+            
+            current_val = self.custom_font_sizes.get(key, 18)
+            spinbox_var = tk.IntVar(value=current_val)
+            self.font_size_spinboxes[key] = spinbox_var
+            
+            spinbox = ttk.Spinbox(spinbox_frame, from_=min_val, to=max_val, textvariable=spinbox_var, width=8)
+            spinbox.pack(side="left")
+            
+            label_display = tk.Label(spinbox_frame, text="pt", fg="#888888")
+            label_display.pack(side="left", padx=5)
+            
+            row += 1
+        
+        # Reset to preset button
+        tk.Label(sizes_frame, text="Presets:", font=("Segoe UI", 10, "bold")).grid(
+            row=row, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
+        
+        row += 1
+        button_frame = tk.Frame(sizes_frame)
+        button_frame.grid(row=row, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        
+        for preset_name in ["Small", "Medium", "Large"]:
+            tk.Button(button_frame, text=preset_name, width=12,
+                     command=lambda p=preset_name: self.apply_preset(p)).pack(side="left", padx=3)
+        
+        sizes_frame.grid_columnconfigure(1, weight=1)
+    
+    def apply_preset(self, preset_name):
+        """Apply a preset font size configuration."""
+        if preset_name in core.FONT_SIZES:
+            preset_sizes = core.FONT_SIZES[preset_name]
+            for key, spinbox_var in self.font_size_spinboxes.items():
+                if key in preset_sizes:
+                    spinbox_var.set(preset_sizes[key])
+    
     def create_audio_tab(self, notebook):
         """Create Audio Settings tab."""
         audio_frame = ttk.Frame(notebook)
@@ -224,23 +296,29 @@ class SettingsDialog(simpledialog.Dialog):
         self.volume_label = tk.Label(volume_control_frame, text=f"{int(self.current_volume * 100)}%", width=5)
         self.volume_label.pack(side="left", padx=5)
         
-        tk.Label(audio_frame, text="Test Audio:").grid(row=1, column=0, sticky="w", padx=5, pady=(20, 5))
+        tk.Label(audio_frame, text="System Audio (Linux only):").grid(row=1, column=0, sticky="w", padx=5, pady=(20, 10))
+        self.linux_max_volume_var = tk.BooleanVar(value=self.linux_max_volume)
+        tk.Checkbutton(audio_frame, text="Set system volume to 100% on Linux (helps with silent alerts)", 
+                      variable=self.linux_max_volume_var).grid(row=2, column=0, columnspan=2, 
+                                                               sticky="w", padx=10, pady=5)
+        
+        tk.Label(audio_frame, text="Test Audio:").grid(row=3, column=0, sticky="w", padx=5, pady=(20, 5))
         button_frame = tk.Frame(audio_frame)
-        button_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        button_frame.grid(row=4, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
         tk.Button(button_frame, text="Test Athan", command=self.test_athan_audio, width=15).pack(side="left", padx=3)
         tk.Button(button_frame, text="Test Fajr Athan", command=self.test_fajr_audio, width=15).pack(side="left", padx=3)
         tk.Button(button_frame, text="Test Dua", command=self.test_dua_audio, width=15).pack(side="left", padx=3)
         
-        tk.Label(audio_frame, text="Custom Audio Files:").grid(row=3, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
-        tk.Label(audio_frame, text="Athan File:").grid(row=4, column=0, sticky="w", padx=5, pady=5)
-        tk.Button(audio_frame, text="Browse...", command=self.select_athan_file, width=15).grid(row=4, column=1, sticky="w", padx=5, pady=5)
+        tk.Label(audio_frame, text="Custom Audio Files:").grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
+        tk.Label(audio_frame, text="Athan File:").grid(row=6, column=0, sticky="w", padx=5, pady=5)
+        tk.Button(audio_frame, text="Browse...", command=self.select_athan_file, width=15).grid(row=6, column=1, sticky="w", padx=5, pady=5)
         self.athan_file_display = tk.Label(audio_frame, text=os.path.basename(self.athan_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
-        self.athan_file_display.grid(row=4, column=1, sticky="e", padx=5, pady=5)
+        self.athan_file_display.grid(row=6, column=1, sticky="e", padx=5, pady=5)
         
-        tk.Label(audio_frame, text="Dua File:").grid(row=5, column=0, sticky="w", padx=5, pady=5)
-        tk.Button(audio_frame, text="Browse...", command=self.select_dua_file, width=15).grid(row=5, column=1, sticky="w", padx=5, pady=5)
+        tk.Label(audio_frame, text="Dua File:").grid(row=7, column=0, sticky="w", padx=5, pady=5)
+        tk.Button(audio_frame, text="Browse...", command=self.select_dua_file, width=15).grid(row=7, column=1, sticky="w", padx=5, pady=5)
         self.dua_file_display = tk.Label(audio_frame, text=os.path.basename(self.dua_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
-        self.dua_file_display.grid(row=5, column=1, sticky="e", padx=5, pady=5)
+        self.dua_file_display.grid(row=7, column=1, sticky="e", padx=5, pady=5)
         
         audio_frame.grid_columnconfigure(1, weight=1)
     
@@ -452,12 +530,18 @@ class SettingsDialog(simpledialog.Dialog):
         school_name = self.school_combo.get()
         font_size = self.font_size_combo.get()
         
+        # Collect custom font sizes from spinboxes
+        custom_sizes = {}
+        for key, spinbox_var in self.font_size_spinboxes.items():
+            custom_sizes[key] = spinbox_var.get()
+        
         self.result = {
             "country": country,
             "city": city,
             "method": self.method_options[method_name],
             "school": self.school_options[school_name],
             "font_size": font_size,
+            "custom_font_sizes": custom_sizes,
             "volume": self.volume_var.get(),
             "athan_file": self.athan_file,
             "dua_file": self.dua_file,
@@ -466,7 +550,8 @@ class SettingsDialog(simpledialog.Dialog):
             "window_state": self.window_state_var.get(),
             "start_minimized": self.start_minimized_var.get(),
             "data_retention_days": self.data_retention_var.get(),
-            "show_weather": self.show_weather_var.get()
+            "show_weather": self.show_weather_var.get(),
+            "linux_max_volume": self.linux_max_volume_var.get()
         }
 
     def buttonbox(self):
@@ -656,12 +741,12 @@ class PrayerTimesFrame(tk.Frame):
             )
             
             if self.weather_data and self.show_weather:
-                temp = self.weather_data["temperature"]
-                weather = self.weather_data["weather"]
+                high = self.weather_data["temp_high"]
+                low = self.weather_data["temp_low"]
                 humidity = self.weather_data["humidity"]
                 wind = self.weather_data["wind_speed"]
                 
-                weather_text = f"{temp}°F {weather} | {humidity}% | {wind} mph"
+                weather_text = f"{high}°F/{low}°F | {humidity}% | {wind} mph"
                 self.weather_label.config(text=weather_text)
         except Exception as e:
             logger.warning(f"Failed to update weather: {e}")
@@ -857,8 +942,10 @@ class PrayerTimesFrame(tk.Frame):
                     min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
-                # Check if prayer is within alert threshold (30 seconds before)
-                if 0 <= seconds_until <= core.ALERT_THRESHOLD_SECONDS and prayer not in self.alerted_prayers:
+                # Check if prayer is within alert threshold (30 seconds before) AND prayer alerts are enabled
+                if (0 <= seconds_until <= core.ALERT_THRESHOLD_SECONDS and 
+                    prayer not in self.alerted_prayers and 
+                    self.prayer_alerts.get(prayer, True)):
                     logger.info(f"[ALERT] Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
@@ -1030,6 +1117,7 @@ class MainWindow(tk.Tk):
         self.api_method = saved_settings["method"]
         self.api_school = saved_settings["school"]
         self.font_size = saved_settings["font_size"]
+        self.custom_font_sizes = saved_settings.get("custom_font_sizes", core.FONT_SIZES.get(self.font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE]).copy())
         self.audio_volume = saved_settings["volume"]
         self.athan_file = saved_settings["athan_file"]
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
@@ -1041,6 +1129,11 @@ class MainWindow(tk.Tk):
         self.window_geometry = saved_settings["window_geometry"]
         self.data_retention_days = data_retention_days
         self.show_weather = saved_settings.get("show_weather", True)
+        self.linux_max_volume = saved_settings.get("linux_max_volume", False)
+        
+        # Set system volume to 100% on Linux if enabled
+        if self.linux_max_volume:
+            threading.Thread(target=core.set_system_volume_linux, args=(100,), daemon=True).start()
         
         self.menu = PrayerMenu(
             self, self.country_var, self.city_var, COUNTRY_CITIES,
@@ -1234,7 +1327,8 @@ class MainWindow(tk.Tk):
                                self.font_size, self.audio_volume,
                                self.window_state, self.start_minimized,
                                self.alert_threshold, self.prayer_alerts,
-                               self.athan_file, self.dua_file, self.show_weather)
+                               self.athan_file, self.dua_file, self.show_weather,
+                               self.custom_font_sizes, self.linux_max_volume)
         if dialog.result:
             try:
                 # Update location
@@ -1247,11 +1341,17 @@ class MainWindow(tk.Tk):
                 
                 # Update display
                 self.font_size = dialog.result["font_size"]
+                self.custom_font_sizes = dialog.result.get("custom_font_sizes", self.custom_font_sizes)
                 
                 # Update audio
                 self.audio_volume = dialog.result["volume"]
                 self.athan_file = dialog.result["athan_file"]
                 self.dua_file = dialog.result["dua_file"]
+                self.linux_max_volume = dialog.result.get("linux_max_volume", False)
+                
+                # Apply Linux system volume if enabled
+                if self.linux_max_volume:
+                    threading.Thread(target=core.set_system_volume_linux, args=(100,), daemon=True).start()
                 
                 # Update notifications
                 self.alert_threshold = dialog.result["alert_threshold"]
@@ -1296,6 +1396,7 @@ class MainWindow(tk.Tk):
                     "method": self.api_method,
                     "school": self.api_school,
                     "font_size": self.font_size,
+                    "custom_font_sizes": self.custom_font_sizes,
                     "volume": self.audio_volume,
                     "athan_file": self.athan_file,
                     "dua_file": self.dua_file,
@@ -1305,7 +1406,8 @@ class MainWindow(tk.Tk):
                     "start_minimized": self.start_minimized,
                     "window_geometry": window_geometry,
                     "data_retention_days": self.data_retention_days,
-                    "show_weather": self.show_weather
+                    "show_weather": self.show_weather,
+                    "linux_max_volume": self.linux_max_volume
                 })
                 
                 # Update prayer frame location and refresh weather
@@ -1327,16 +1429,13 @@ class MainWindow(tk.Tk):
                 logger.error(f"Error applying settings: {e}", exc_info=True)
     
     def apply_font_sizes(self):
-        """Apply selected font size."""
+        """Apply selected font size using custom sizes or preset."""
         try:
-            if self.font_size not in core.FONT_SIZES:
-                logger.error(f"Invalid font size: {self.font_size}")
-                return
+            # Use custom font sizes if available, otherwise fallback to preset
+            sizes = self.custom_font_sizes if self.custom_font_sizes else core.FONT_SIZES.get(self.font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE])
             
             # Update prayer frame font size
             self.prayer_frame.font_size = self.font_size
-            
-            sizes = core.FONT_SIZES[self.font_size]
             
             self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
             self.gregorian_label.config(font=("Segoe UI", sizes["date"]))
@@ -1411,6 +1510,28 @@ class MainWindow(tk.Tk):
             "country": self.country_var.get()
         }
         self.prayer_frame.update_times()
+        
+        # Save location change to settings
+        window_geometry, current_state = self.save_window_state()
+        core.save_settings({
+            "country": self.country_var.get(),
+            "city": self.city_var.get(),
+            "method": self.api_method,
+            "school": self.api_school,
+            "font_size": self.font_size,
+            "custom_font_sizes": self.custom_font_sizes,
+            "volume": self.audio_volume,
+            "athan_file": self.athan_file,
+            "dua_file": self.dua_file,
+            "alert_threshold": self.alert_threshold,
+            "prayer_alerts": self.prayer_alerts,
+            "window_state": self.window_state,
+            "start_minimized": self.start_minimized,
+            "window_geometry": window_geometry,
+            "data_retention_days": self.data_retention_days,
+            "show_weather": self.show_weather,
+            "linux_max_volume": self.linux_max_volume
+        })
 
     def refresh_prayer_times(self):
         """Force refresh of prayer times."""

@@ -777,6 +777,7 @@ def load_settings():
         "method": API_METHOD,
         "school": API_SCHOOL,
         "font_size": DEFAULT_FONT_SIZE,
+        "custom_font_sizes": FONT_SIZES.get(DEFAULT_FONT_SIZE, FONT_SIZES["Medium"]).copy(),
         "volume": 1.0,
         "athan_file": str(PROJECT_ROOT / "src/assets/athan.wav"),
         "dua_file": str(PROJECT_ROOT / "src/assets/dua.wav"),
@@ -786,7 +787,8 @@ def load_settings():
         "start_minimized": DEFAULT_START_MINIMIZED,
         "window_geometry": DEFAULT_WINDOW_GEOMETRY,
         "data_retention_days": DEFAULT_DATA_RETENTION_DAYS,
-        "show_weather": True
+        "show_weather": True,
+        "linux_max_volume": False
     }
     
     try:
@@ -888,25 +890,36 @@ def fetch_weather(city, country):
             latitude = float(geo_data[0]["lat"])
             longitude = float(geo_data[0]["lon"])
             
-            # Fetch weather using Open-Meteo
+            # Fetch weather using Open-Meteo (current conditions + daily forecast)
             weather_response = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
                     "latitude": latitude,
                     "longitude": longitude,
-                    "current": "temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m",
+                    "current": "temperature_2m,relative_humidity_2m,wind_speed_10m",
+                    "daily": "temperature_2m_max,temperature_2m_min",
                     "temperature_unit": "fahrenheit"
                 },
                 timeout=WEATHER_TIMEOUT
             )
             weather_response.raise_for_status()
-            data = weather_response.json()["current"]
+            response_data = weather_response.json()
+            current = response_data["current"]
+            daily = response_data["daily"]
+            
+            # Validate daily data exists
+            if (not daily.get("temperature_2m_max") or not daily.get("temperature_2m_min") or
+                len(daily["temperature_2m_max"]) == 0 or len(daily["temperature_2m_min"]) == 0):
+                logger.warning(f"Incomplete daily temperature data for {city}")
+                if cache_key in _weather_cache:
+                    return _weather_cache[cache_key][0]
+                return None
             
             result = {
-                "temperature": int(data["temperature_2m"]),
-                "weather": get_weather_description(data["weather_code"]),
-                "humidity": data["relative_humidity_2m"],
-                "wind_speed": round(data["wind_speed_10m"], 1),
+                "temp_high": int(daily["temperature_2m_max"][0]),
+                "temp_low": int(daily["temperature_2m_min"][0]),
+                "humidity": current["relative_humidity_2m"],
+                "wind_speed": round(current["wind_speed_10m"], 1),
                 "unit": "°F"
             }
             
@@ -920,9 +933,9 @@ def fetch_weather(city, country):
                 fetch_key_with_period = f"{fetch_key}:{period}"
                 _weather_fetch_times[fetch_key_with_period] = True
                 period = "[MORNING]" if in_morning_window else "[EVENING]"
-                logger.info(f"{period} Weather fetched for {city}: {result['temperature']}°F {result['weather']}")
+                logger.info(f"{period} Weather fetched for {city}: {result['temp_high']}°F/{result['temp_low']}°F")
             else:
-                logger.info(f"Initial weather fetched for {city}: {result['temperature']}° {result['weather']}")
+                logger.info(f"Initial weather fetched for {city}: {result['temp_high']}°F/{result['temp_low']}°F")
             
             return result
             
@@ -951,6 +964,52 @@ def fetch_weather(city, country):
             return cached_data
         
         return None
+
+
+def set_system_volume_linux(volume_percent=100):
+    """Set system volume to specified percentage on Linux (useful for ensuring alerts are audible).
+    
+    Args:
+        volume_percent: Volume percentage (0-100), default 100%
+    
+    Note: This only works on Linux and requires 'pactl' or 'amixer' to be installed.
+    """
+    if platform.system() != "Linux":
+        logger.debug("System volume adjustment skipped (not on Linux)")
+        return False
+    
+    try:
+        # Try using pactl first (PulseAudio/PipeWire)
+        try:
+            # Get default sink (output device)
+            result = subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"[OK] System volume set to {volume_percent}% using pactl")
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        # Fallback to amixer (ALSA)
+        try:
+            result = subprocess.run(
+                ["amixer", "-q", "sset", "Master", f"{volume_percent}%"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"[OK] System volume set to {volume_percent}% using amixer")
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        logger.warning("Could not set system volume: pactl and amixer not found or failed")
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error setting system volume on Linux: {e}")
+        return False
 
 
 def calculate_prayer_times(date, location):
