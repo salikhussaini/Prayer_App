@@ -1313,12 +1313,12 @@ class MainWindow(tk.Tk):
                     "city": dialog.result["city"],
                     "country": dialog.result["country"]
                 }
-                self.prayer_frame.on_location_change()
                 
-                # Refresh weather immediately for new location
+                # Reset weather label for new location
                 if self.show_weather:
                     self.weather_label.config(text="Loading weather...")
-                    self.prayer_frame.after(100, self.prayer_frame.update_weather_async)
+                
+                self.prayer_frame.on_location_change()
                 
                 self.apply_font_sizes()
                 self.apply_window_state()
