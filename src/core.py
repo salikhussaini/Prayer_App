@@ -89,9 +89,9 @@ DEFAULT_CITY = "Chicago"
 
 # UI Configuration
 FONT_SIZES = {
-    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40, "weather": 18},
-    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50, "weather": 22},
-    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60, "weather": 28}
+    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40, "weather": 40},
+    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50, "weather": 50},
+    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60, "weather": 60}
 }
 DEFAULT_FONT_SIZE = "Medium"
 
