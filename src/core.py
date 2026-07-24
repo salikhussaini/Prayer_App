@@ -319,7 +319,7 @@ def cleanup_old_prayer_data(retention_days=DEFAULT_DATA_RETENTION_DAYS):
             deleted_count = cursor.rowcount
         
         if deleted_count > 0:
-            logger.info(f"✅ Cleaned up {deleted_count} old prayer records (older than {retention_days} days)")
+            logger.info(f"[OK] Cleaned up {deleted_count} old prayer records (older than {retention_days} days)")
         else:
             logger.debug(f"No old prayer records to clean (retention: {retention_days} days)")
         
@@ -349,7 +349,7 @@ def clear_all_prayer_data():
             cursor.execute("DELETE FROM prayer_times")
             deleted_count = cursor.rowcount
         
-        logger.info(f"✅ Cleared all prayer data ({deleted_count} records deleted)")
+        logger.info(f"[OK] Cleared all prayer data ({deleted_count} records deleted)")
         return deleted_count
     except Exception as e:
         logger.error(f"Error clearing prayer data: {e}")
@@ -810,18 +810,18 @@ def load_settings():
 # =====================================================================
 
 def get_weather_description(weather_code):
-    """Convert WMO weather code to emoji description."""
+    """Convert WMO weather code to weather description."""
     codes = {
-        0: "Clear ☀️", 1: "Mostly Clear ☀️", 2: "Partly Cloudy ⛅", 3: "Overcast ☁️",
-        45: "Foggy 🌫️", 48: "Foggy 🌫️",
-        51: "Light Drizzle 🌧️", 53: "Drizzle 🌧️", 55: "Heavy Drizzle 🌧️",
-        61: "Light Rain 🌧️", 63: "Rain 🌧️", 65: "Heavy Rain ⛈️",
-        71: "Light Snow ❄️", 73: "Snow ❄️", 75: "Heavy Snow ❄️",
-        77: "Snow Grains ❄️",
-        80: "Light Showers 🌧️", 82: "Heavy Showers ⛈️", 85: "Snow Showers ❄️",
-        95: "Thunderstorm ⛈️", 96: "Thunderstorm w/ Hail ⛈️", 99: "Thunderstorm w/ Hail ⛈️"
+        0: "Clear", 1: "Mostly Clear", 2: "Partly Cloudy", 3: "Overcast",
+        45: "Foggy", 48: "Foggy",
+        51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
+        61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
+        71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
+        77: "Snow Grains",
+        80: "Light Showers", 82: "Heavy Showers", 85: "Snow Showers",
+        95: "Thunderstorm", 96: "Thunderstorm w/ Hail", 99: "Thunderstorm w/ Hail"
     }
-    return codes.get(weather_code, "Unknown 🌐")
+    return codes.get(weather_code, "Unknown")
 
 
 def fetch_weather(city, country):
@@ -919,9 +919,8 @@ def fetch_weather(city, country):
                 period = "morning" if in_morning_window else "evening"
                 fetch_key_with_period = f"{fetch_key}:{period}"
                 _weather_fetch_times[fetch_key_with_period] = True
-                emoji = "☀️" if in_morning_window else "🌙"
-                period_name = "Morning" if in_morning_window else "Evening"
-                logger.info(f"{emoji} {period_name} weather fetched for {city}: {result['temperature']}° {result['weather']}")
+                period = "[MORNING]" if in_morning_window else "[EVENING]"
+                logger.info(f"{period} Weather fetched for {city}: {result['temperature']}°F {result['weather']}")
             else:
                 logger.info(f"Initial weather fetched for {city}: {result['temperature']}° {result['weather']}")
             

@@ -354,28 +354,28 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Label(about_frame, text="Current Settings:", font=("Segoe UI", 11, "bold")).grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 10))
         
         # Location
-        location_text = f"📍 Location: {self.current_city}, {self.current_country}"
+        location_text = f"[LOCATION] {self.current_city}, {self.current_country}"
         tk.Label(about_frame, text=location_text, font=("Segoe UI", 9), fg=font_color).grid(row=3, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # API Settings
         method_name = core.API_CALCULATION_METHODS.get(self.current_method, "Unknown")
         school_name = core.API_SCHOOLS.get(self.current_school, "Unknown")
-        api_text = f"⚙️ API: {method_name} | {school_name}"
+        api_text = f"[API] {method_name} | {school_name}"
         tk.Label(about_frame, text=api_text, font=("Segoe UI", 9), fg=font_color).grid(row=4, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Display
-        display_text = f"🖥️ Display: {self.current_font_size} font size"
+        display_text = f"[DISPLAY] {self.current_font_size} font size"
         tk.Label(about_frame, text=display_text, font=("Segoe UI", 9), fg=font_color).grid(row=5, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Audio
         volume_percent = int(self.current_volume * 100)
-        audio_text = f"🔊 Audio: Volume {volume_percent}%"
+        audio_text = f"[AUDIO] Volume {volume_percent}%"
         tk.Label(about_frame, text=audio_text, font=("Segoe UI", 9), fg=font_color).grid(row=6, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Notifications
         enabled_prayers = [prayer for prayer, enabled in self.current_prayer_alerts.items() if enabled]
         prayers_text = ", ".join(enabled_prayers) if enabled_prayers else "None"
-        notif_text = f"🔔 Alerts: {self.current_alert_threshold}s before | Prayers: {prayers_text}"
+        notif_text = f"[ALERTS] {self.current_alert_threshold}s before | Prayers: {prayers_text}"
         tk.Label(about_frame, text=notif_text, font=("Segoe UI", 9), fg=font_color, wraplength=450, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Window
@@ -385,7 +385,7 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Label(about_frame, text=window_text, font=("Segoe UI", 9), fg=font_color).grid(row=8, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Data Management
-        data_text = f"💾 Data: Keep {self.data_retention_days} days"
+        data_text = f"[DATA] Keep {self.data_retention_days} days"
         tk.Label(about_frame, text=data_text, font=("Segoe UI", 9), fg=font_color).grid(row=9, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Credits
@@ -661,7 +661,7 @@ class PrayerTimesFrame(tk.Frame):
                 humidity = self.weather_data["humidity"]
                 wind = self.weather_data["wind_speed"]
                 
-                weather_text = f"🌡️ {temp}°F {weather} | 💧 {humidity}% | 💨 {wind} mph"
+                weather_text = f"{temp}°F {weather} | {humidity}% | {wind} mph"
                 self.weather_label.config(text=weather_text)
         except Exception as e:
             logger.warning(f"Failed to update weather: {e}")
@@ -681,15 +681,15 @@ class PrayerTimesFrame(tk.Frame):
         all_exist = True
         for name, path in audio_files:
             if os.path.exists(path):
-                logger.info(f"✅ {name} audio file found: {path}")
+                logger.info(f"[OK] {name} audio file found: {path}")
             else:
-                logger.error(f"❌ {name} audio file MISSING: {path}")
+                logger.error(f"[ERROR] {name} audio file MISSING: {path}")
                 all_exist = False
         
         if all_exist:
-            logger.info("✅ All audio files verified")
+            logger.info("[OK] All audio files verified")
         else:
-            logger.warning("⚠️ Some audio files missing")
+            logger.warning("[WARNING] Some audio files missing")
 
     def _init_labels(self):
         """Initialize prayer time label widgets."""
@@ -859,7 +859,7 @@ class PrayerTimesFrame(tk.Frame):
                 
                 # Check if prayer is within alert threshold (30 seconds before)
                 if 0 <= seconds_until <= core.ALERT_THRESHOLD_SECONDS and prayer not in self.alerted_prayers:
-                    logger.info(f"🔔 Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
+                    logger.info(f"[ALERT] Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
             except ValueError as e:
@@ -902,7 +902,7 @@ class PrayerTimesFrame(tk.Frame):
 
     def alert_user(self, prayer):
         """Play alert sounds for prayer notification."""
-        logger.info(f"🔔 Starting alert sequence for {prayer} prayer")
+        logger.info(f"[ALERT] Starting alert sequence for {prayer} prayer")
         
         dua_path = str(core.PROJECT_ROOT / "src/assets/dua.wav")
         if prayer == "Fajr":
@@ -916,11 +916,11 @@ class PrayerTimesFrame(tk.Frame):
     def play_alert_audio(self, athan_path, dua_path):
         """Play audio files sequentially in the main thread (thread-safe)."""
         if not os.path.exists(athan_path):
-            logger.warning(f"❌ Athan file not found: {athan_path}")
+            logger.warning(f"[ERROR] Athan file not found: {athan_path}")
             return
         
         try:
-            logger.info(f"🔊 Playing athan: {athan_path}")
+            logger.info(f"[AUDIO] Playing athan: {athan_path}")
             pygame.mixer.music.load(athan_path)
             pygame.mixer.music.play()
             
@@ -930,29 +930,29 @@ class PrayerTimesFrame(tk.Frame):
             
             # Schedule dua playback after athan finishes
             self.after(delay_ms, lambda: self.play_dua_audio(dua_path))
-            logger.info(f"✅ Athan scheduled (duration: {audio_length:.1f}s)")
+            logger.info(f"[OK] Athan scheduled (duration: {audio_length:.1f}s)")
             
         except pygame.error as e:
-            logger.error(f"❌ Pygame error loading athan: {e}")
+            logger.error(f"[ERROR] Pygame error loading athan: {e}")
         except Exception as e:
-            logger.error(f"❌ Error playing athan: {e}")
+            logger.error(f"[ERROR] Error playing athan: {e}")
 
     def play_dua_audio(self, dua_path):
         """Play dua audio file."""
         if not os.path.exists(dua_path):
-            logger.warning(f"❌ Dua file not found: {dua_path}")
+            logger.warning(f"[ERROR] Dua file not found: {dua_path}")
             return
         
         try:
-            logger.info(f"🔊 Playing dua: {dua_path}")
+            logger.info(f"[AUDIO] Playing dua: {dua_path}")
             pygame.mixer.music.load(dua_path)
             pygame.mixer.music.play()
-            logger.info(f"✅ Dua playing")
+            logger.info(f"[OK] Dua playing")
             
         except pygame.error as e:
-            logger.error(f"❌ Pygame error loading dua: {e}")
+            logger.error(f"[ERROR] Pygame error loading dua: {e}")
         except Exception as e:
-            logger.error(f"❌ Error playing dua: {e}")
+            logger.error(f"[ERROR] Error playing dua: {e}")
 
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight."""
