@@ -70,7 +70,7 @@ class SettingsDialog(simpledialog.Dialog):
     def __init__(self, parent, title, country_cities, current_country, current_city, 
                  current_method, current_school, current_font_size=None, current_volume=1.0,
                  current_window_state=None, current_start_minimized=False, current_alert_threshold=None,
-                 current_prayer_alerts=None, current_athan_file=None, current_dua_file=None):
+                 current_prayer_alerts=None, current_athan_file=None, current_dua_file=None, current_show_weather=True):
         self.country_cities = country_cities
         self.current_country = current_country
         self.current_city = current_city
@@ -87,6 +87,7 @@ class SettingsDialog(simpledialog.Dialog):
         self.current_start_minimized = current_start_minimized
         self.current_alert_threshold = current_alert_threshold or core.ALERT_THRESHOLD_SECONDS
         self.current_prayer_alerts = current_prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
+        self.current_show_weather = current_show_weather
         self.data_retention_days = core.load_settings().get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
         self.parent_window = parent
         
@@ -200,6 +201,12 @@ class SettingsDialog(simpledialog.Dialog):
         self.font_size_combo = ttk.Combobox(display_frame, values=self.font_size_options, width=40, state="readonly")
         self.font_size_combo.set(self.current_font_size)
         self.font_size_combo.grid(row=0, column=1, padx=5, pady=5)
+        
+        tk.Label(display_frame, text="Display Options:").grid(row=1, column=0, sticky="w", padx=5, pady=(20, 10))
+        self.show_weather_var = tk.BooleanVar(value=self.current_show_weather)
+        tk.Checkbutton(display_frame, text="Show weather (temperature & conditions)", 
+                      variable=self.show_weather_var).grid(row=2, column=0, columnspan=2, 
+                                                            sticky="w", padx=10, pady=5)
     
     def create_audio_tab(self, notebook):
         """Create Audio Settings tab."""
@@ -337,9 +344,10 @@ class SettingsDialog(simpledialog.Dialog):
         """Create About tab showing current settings."""
         about_frame = ttk.Frame(notebook)
         notebook.add(about_frame, text="About")
+        font_color = "#000000"
         
         # App info
-        tk.Label(about_frame, text="Prayer Times App", font=("Segoe UI", 14, "bold"), fg="#00FF99").grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
+        tk.Label(about_frame, text="Prayer Times App", font=("Segoe UI", 14, "bold"), fg=font_color).grid(row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 5))
         tk.Label(about_frame, text="Version 1.0", font=("Segoe UI", 9), fg="#888888").grid(row=1, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 20))
         
         # Current Settings Summary
@@ -347,43 +355,43 @@ class SettingsDialog(simpledialog.Dialog):
         
         # Location
         location_text = f"📍 Location: {self.current_city}, {self.current_country}"
-        tk.Label(about_frame, text=location_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=3, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=location_text, font=("Segoe UI", 9), fg=font_color).grid(row=3, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # API Settings
         method_name = core.API_CALCULATION_METHODS.get(self.current_method, "Unknown")
         school_name = core.API_SCHOOLS.get(self.current_school, "Unknown")
         api_text = f"⚙️ API: {method_name} | {school_name}"
-        tk.Label(about_frame, text=api_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=4, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=api_text, font=("Segoe UI", 9), fg=font_color).grid(row=4, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Display
         display_text = f"🖥️ Display: {self.current_font_size} font size"
-        tk.Label(about_frame, text=display_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=5, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=display_text, font=("Segoe UI", 9), fg=font_color).grid(row=5, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Audio
         volume_percent = int(self.current_volume * 100)
         audio_text = f"🔊 Audio: Volume {volume_percent}%"
-        tk.Label(about_frame, text=audio_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=6, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=audio_text, font=("Segoe UI", 9), fg=font_color).grid(row=6, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Notifications
         enabled_prayers = [prayer for prayer, enabled in self.current_prayer_alerts.items() if enabled]
         prayers_text = ", ".join(enabled_prayers) if enabled_prayers else "None"
         notif_text = f"🔔 Alerts: {self.current_alert_threshold}s before | Prayers: {prayers_text}"
-        tk.Label(about_frame, text=notif_text, font=("Segoe UI", 9), fg="#00FF99", wraplength=450, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=notif_text, font=("Segoe UI", 9), fg=font_color, wraplength=450, justify="left").grid(row=7, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Window
         window_text = f"🪟 Window: {self.current_window_state}"
         if self.current_start_minimized:
             window_text += " | Start minimized"
-        tk.Label(about_frame, text=window_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=8, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=window_text, font=("Segoe UI", 9), fg=font_color).grid(row=8, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Data Management
         data_text = f"💾 Data: Keep {self.data_retention_days} days"
-        tk.Label(about_frame, text=data_text, font=("Segoe UI", 9), fg="#00FF99").grid(row=9, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text=data_text, font=("Segoe UI", 9), fg=font_color).grid(row=9, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Credits
-        tk.Label(about_frame, text="Credits:", font=("Segoe UI", 11, "bold")).grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=(20, 10))
-        tk.Label(about_frame, text="Powered by Aladhan API", font=("Segoe UI", 9), fg="#888888").grid(row=11, column=0, columnspan=2, sticky="w", padx=20, pady=2)
-        tk.Label(about_frame, text="© 2026 Prayer Times App", font=("Segoe UI", 9), fg="#888888").grid(row=12, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text="Credits:", font=("Segoe UI", 11, "bold"), fg=font_color).grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=(20, 10))
+        tk.Label(about_frame, text="Powered by Aladhan API", font=("Segoe UI", 9), fg=font_color).grid(row=11, column=0, columnspan=2, sticky="w", padx=20, pady=2)
+        tk.Label(about_frame, text="© 2026 Prayer Times App", font=("Segoe UI", 9), fg=font_color).grid(row=12, column=0, columnspan=2, sticky="w", padx=20, pady=2)
     
     def update_volume_label(self, value):
         """Update volume percentage label."""
@@ -457,7 +465,8 @@ class SettingsDialog(simpledialog.Dialog):
             "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()},
             "window_state": self.window_state_var.get(),
             "start_minimized": self.start_minimized_var.get(),
-            "data_retention_days": self.data_retention_var.get()
+            "data_retention_days": self.data_retention_var.get(),
+            "show_weather": self.show_weather_var.get()
         }
 
     def buttonbox(self):
@@ -589,9 +598,13 @@ class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
     now = datetime.datetime.now()
     
-    def __init__(self, master=None, date=None, location=None):
+    def __init__(self, master=None, date=None, location=None, show_weather=True, font_size="Medium", weather_label=None):
         super().__init__(master, bg="#000000")
         self.date = date
+        self.show_weather = show_weather
+        self.font_size = font_size
+        self.weather_data = None
+        self.weather_label = weather_label  # Reference to MainWindow's weather label
         
         try:
             pygame.mixer.quit()
@@ -625,6 +638,37 @@ class PrayerTimesFrame(tk.Frame):
         self.schedule_midnight_reset()
         self.pack_propagate(False)
         self.update_clock()
+        
+        # Load weather asynchronously after app initializes (after 500ms)
+        if self.show_weather:
+            self.after(500, self.update_weather_async)
+
+    def update_weather_async(self):
+        """Fetch weather asynchronously without blocking UI.
+        
+        Only fetches during morning (6-9 AM) and evening (6-9 PM) windows.
+        Updates display every 30 seconds to show latest cached data.
+        """
+        try:
+            self.weather_data = core.fetch_weather(
+                self.location["city"],
+                self.location["country"]
+            )
+            
+            if self.weather_data and self.show_weather:
+                temp = self.weather_data["temperature"]
+                weather = self.weather_data["weather"]
+                humidity = self.weather_data["humidity"]
+                wind = self.weather_data["wind_speed"]
+                
+                weather_text = f"🌡️ {temp}°F {weather} | 💧 {humidity}% | 💨 {wind} mph"
+                self.weather_label.config(text=weather_text)
+        except Exception as e:
+            logger.warning(f"Failed to update weather: {e}")
+        
+        # Check every 30 seconds (only fetches during morning/evening windows)
+        if self.show_weather:
+            self.after(30000, self.update_weather_async)  # 30 sec = 30000 ms
 
     def _test_audio_files(self):
         """Test that all required audio files exist."""
@@ -657,7 +701,7 @@ class PrayerTimesFrame(tk.Frame):
         for idx, prayer in enumerate(self.PRAYERS):
             frame = tk.Frame(self, bg="#000000", highlightbackground=border_color, 
                            highlightthickness=3, padx=15, pady=15)
-            frame.grid(row=2, column=idx, padx=10, pady=20, sticky="nsew")
+            frame.grid(row=3, column=idx, padx=10, pady=20, sticky="nsew")
 
             lbl_prayer = tk.Label(frame, text=prayer, font=("Segoe UI", 18, "bold"),
                                 bg="#000000", fg=text_color)
@@ -681,6 +725,11 @@ class PrayerTimesFrame(tk.Frame):
         self.update_times()
         self.update_next_prayer()
         self.alerted_prayers.clear()
+        
+        # Refresh weather for new location
+        if self.show_weather and self.weather_label:
+            self.weather_label.config(text="Loading weather...")
+            self.after(100, self.update_weather_async)
 
     def update_times(self, times=None):
         """Update displayed prayer times."""
@@ -991,6 +1040,7 @@ class MainWindow(tk.Tk):
         self.start_minimized = saved_settings["start_minimized"]
         self.window_geometry = saved_settings["window_geometry"]
         self.data_retention_days = data_retention_days
+        self.show_weather = saved_settings.get("show_weather", True)
         
         self.menu = PrayerMenu(
             self, self.country_var, self.city_var, COUNTRY_CITIES,
@@ -1032,9 +1082,20 @@ class MainWindow(tk.Tk):
         self.hijri_label = ttk.Label(self.date_frame, text="", style="Date.TLabel")
         self.hijri_label.pack(fill="x", anchor="e")
         
+        # Weather label in top-right corner
+        weather_font_size = core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"]).get("weather", 12)
+        self.weather_label = tk.Label(
+            self.date_frame, text="Loading weather...", font=("Segoe UI", weather_font_size),
+            bg="#000000", fg="#00FF99", pady=3
+        )
+        self.weather_label.pack(fill="x", anchor="e", pady=(5, 0))
+        
         self.prayer_frame = PrayerTimesFrame(
             self, date=datetime.date.today(),
-            location={"city": self.city_var.get(), "country": self.country_var.get()}
+            location={"city": self.city_var.get(), "country": self.country_var.get()},
+            show_weather=self.show_weather,
+            font_size=self.font_size,
+            weather_label=self.weather_label
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         
@@ -1173,7 +1234,7 @@ class MainWindow(tk.Tk):
                                self.font_size, self.audio_volume,
                                self.window_state, self.start_minimized,
                                self.alert_threshold, self.prayer_alerts,
-                               self.athan_file, self.dua_file)
+                               self.athan_file, self.dua_file, self.show_weather)
         if dialog.result:
             try:
                 # Update location
@@ -1202,6 +1263,14 @@ class MainWindow(tk.Tk):
                 
                 # Update data management
                 self.data_retention_days = dialog.result["data_retention_days"]
+                
+                # Update display settings
+                self.show_weather = dialog.result.get("show_weather", True)
+                self.prayer_frame.show_weather = self.show_weather
+                if self.show_weather:
+                    self.prayer_frame.after(100, self.prayer_frame.update_weather_async)
+                else:
+                    self.weather_label.config(text="")
                 
                 core.API_METHOD = self.api_method
                 core.API_SCHOOL = self.api_school
@@ -1235,10 +1304,22 @@ class MainWindow(tk.Tk):
                     "window_state": self.window_state,
                     "start_minimized": self.start_minimized,
                     "window_geometry": window_geometry,
-                    "data_retention_days": self.data_retention_days
+                    "data_retention_days": self.data_retention_days,
+                    "show_weather": self.show_weather
                 })
                 
+                # Update prayer frame location and refresh weather
+                self.prayer_frame.location = {
+                    "city": dialog.result["city"],
+                    "country": dialog.result["country"]
+                }
                 self.prayer_frame.on_location_change()
+                
+                # Refresh weather immediately for new location
+                if self.show_weather:
+                    self.weather_label.config(text="Loading weather...")
+                    self.prayer_frame.after(100, self.prayer_frame.update_weather_async)
+                
                 self.apply_font_sizes()
                 self.apply_window_state()
                 self.refresh_prayer_times()
@@ -1252,6 +1333,9 @@ class MainWindow(tk.Tk):
                 logger.error(f"Invalid font size: {self.font_size}")
                 return
             
+            # Update prayer frame font size
+            self.prayer_frame.font_size = self.font_size
+            
             sizes = core.FONT_SIZES[self.font_size]
             
             self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
@@ -1259,6 +1343,10 @@ class MainWindow(tk.Tk):
             self.hijri_label.config(font=("Segoe UI", sizes["date"]))
             self.prayer_frame.next_prayer_label.config(
                 font=("Segoe UI", sizes["next_prayer"], "bold"))
+            
+            # Update weather label font
+            if self.show_weather:
+                self.weather_label.config(font=("Segoe UI", sizes["weather"]))
             
             for prayer in self.prayer_frame.PRAYERS:
                 # Get prayer name label from frame (first widget is name, second is time)

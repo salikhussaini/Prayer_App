@@ -73,15 +73,25 @@ PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 PREFETCH_DAYS = 30
 ALERT_THRESHOLD_SECONDS = 30
 
+# Weather Configuration
+WEATHER_CACHE_TTL = 86400  # Cache weather for 24 hours (one full day)
+WEATHER_TIMEOUT = 5  # Weather API timeout in seconds
+WEATHER_MORNING_HOUR = 6  # Fetch morning weather at 6 AM
+WEATHER_EVENING_HOUR = 18  # Fetch evening weather at 6 PM
+WEATHER_MORNING_WINDOW = 3  # Allow fetch between 6 AM - 9 AM
+WEATHER_EVENING_WINDOW = 3  # Allow fetch between 6 PM - 9 PM
+_weather_cache = {}
+_weather_fetch_times = {}  # Track when weather was fetched per period
+
 # Default Location
 DEFAULT_COUNTRY = "USA"
 DEFAULT_CITY = "Chicago"
 
 # UI Configuration
 FONT_SIZES = {
-    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40},
-    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50},
-    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60}
+    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40, "weather": 18},
+    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50, "weather": 22},
+    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60, "weather": 28}
 }
 DEFAULT_FONT_SIZE = "Medium"
 
@@ -775,7 +785,8 @@ def load_settings():
         "window_state": DEFAULT_WINDOW_STATE,
         "start_minimized": DEFAULT_START_MINIMIZED,
         "window_geometry": DEFAULT_WINDOW_GEOMETRY,
-        "data_retention_days": DEFAULT_DATA_RETENTION_DAYS
+        "data_retention_days": DEFAULT_DATA_RETENTION_DAYS,
+        "show_weather": True
     }
     
     try:
@@ -792,6 +803,155 @@ def load_settings():
     
     # Return default settings
     return defaults
+
+
+# =====================================================================
+# WEATHER FUNCTIONS
+# =====================================================================
+
+def get_weather_description(weather_code):
+    """Convert WMO weather code to emoji description."""
+    codes = {
+        0: "Clear ☀️", 1: "Mostly Clear ☀️", 2: "Partly Cloudy ⛅", 3: "Overcast ☁️",
+        45: "Foggy 🌫️", 48: "Foggy 🌫️",
+        51: "Light Drizzle 🌧️", 53: "Drizzle 🌧️", 55: "Heavy Drizzle 🌧️",
+        61: "Light Rain 🌧️", 63: "Rain 🌧️", 65: "Heavy Rain ⛈️",
+        71: "Light Snow ❄️", 73: "Snow ❄️", 75: "Heavy Snow ❄️",
+        77: "Snow Grains ❄️",
+        80: "Light Showers 🌧️", 82: "Heavy Showers ⛈️", 85: "Snow Showers ❄️",
+        95: "Thunderstorm ⛈️", 96: "Thunderstorm w/ Hail ⛈️", 99: "Thunderstorm w/ Hail ⛈️"
+    }
+    return codes.get(weather_code, "Unknown 🌐")
+
+
+def fetch_weather(city, country):
+    """Fetch weather from Open-Meteo API (FREE, no key needed).
+    
+    First fetch is allowed anytime to initialize cache.
+    Subsequent fetches only happen during morning (6-9 AM) and evening (6-9 PM).
+    Returns cached data outside these windows.
+    """
+    cache_key = f"{city}:{country}"
+    now = datetime.now()
+    current_hour = now.hour
+    
+    # Check if we're in a fetch window (morning 6-9 AM or evening 6-9 PM)
+    in_morning_window = WEATHER_MORNING_HOUR <= current_hour < WEATHER_MORNING_HOUR + WEATHER_MORNING_WINDOW
+    in_evening_window = WEATHER_EVENING_HOUR <= current_hour < WEATHER_EVENING_HOUR + WEATHER_EVENING_WINDOW
+    in_fetch_window = in_morning_window or in_evening_window
+    
+    # Check if cache exists
+    cache_exists = cache_key in _weather_cache
+    
+    # Allow fetch if: (1) no cache exists yet, or (2) we're in a fetch window and haven't fetched this period yet
+    if cache_exists:
+        # Cache exists - check if we should fetch new data
+        if in_fetch_window:
+            # We're in a fetch window - check if already fetched in this window today
+            fetch_key = f"{cache_key}:{now.strftime('%Y-%m-%d')}"
+            period = "morning" if in_morning_window else "evening"
+            fetch_key_with_period = f"{fetch_key}:{period}"
+            
+            if fetch_key_with_period not in _weather_fetch_times:
+                # Time to fetch new data in this window
+                should_fetch = True
+            else:
+                # Already fetched in this window today
+                should_fetch = False
+        else:
+            # Outside fetch windows - use cache
+            should_fetch = False
+    else:
+        # No cache exists yet - always fetch to initialize
+        should_fetch = True
+    
+    if should_fetch:
+        # Fetch new data
+        try:
+            # Get coordinates from city name
+            geo_response = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"city": city, "country": country, "format": "json"},
+                timeout=WEATHER_TIMEOUT,
+                headers={"User-Agent": "PrayerApp/1.0"}
+            )
+            geo_response.raise_for_status()
+            geo_data = geo_response.json()
+            
+            if not geo_data:
+                logger.warning(f"Location not found: {city}, {country}")
+                # Return cached if available
+                if cache_key in _weather_cache:
+                    return _weather_cache[cache_key][0]
+                return None
+            
+            latitude = float(geo_data[0]["lat"])
+            longitude = float(geo_data[0]["lon"])
+            
+            # Fetch weather using Open-Meteo
+            weather_response = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "current": "temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m",
+                    "temperature_unit": "fahrenheit"
+                },
+                timeout=WEATHER_TIMEOUT
+            )
+            weather_response.raise_for_status()
+            data = weather_response.json()["current"]
+            
+            result = {
+                "temperature": int(data["temperature_2m"]),
+                "weather": get_weather_description(data["weather_code"]),
+                "humidity": data["relative_humidity_2m"],
+                "wind_speed": round(data["wind_speed_10m"], 1),
+                "unit": "°F"
+            }
+            
+            # Cache result
+            _weather_cache[cache_key] = (result, time.time())
+            
+            # Mark as fetched in this time window if we're in one
+            if in_fetch_window:
+                fetch_key = f"{cache_key}:{now.strftime('%Y-%m-%d')}"
+                period = "morning" if in_morning_window else "evening"
+                fetch_key_with_period = f"{fetch_key}:{period}"
+                _weather_fetch_times[fetch_key_with_period] = True
+                emoji = "☀️" if in_morning_window else "🌙"
+                period_name = "Morning" if in_morning_window else "Evening"
+                logger.info(f"{emoji} {period_name} weather fetched for {city}: {result['temperature']}° {result['weather']}")
+            else:
+                logger.info(f"Initial weather fetched for {city}: {result['temperature']}° {result['weather']}")
+            
+            return result
+            
+        except requests.exceptions.Timeout:
+            logger.warning(f"Weather API timeout for {city}")
+            # Return cached if available
+            if cache_key in _weather_cache:
+                return _weather_cache[cache_key][0]
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Weather API error: {e}")
+            if cache_key in _weather_cache:
+                return _weather_cache[cache_key][0]
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching weather: {e}", exc_info=True)
+            if cache_key in _weather_cache:
+                return _weather_cache[cache_key][0]
+            return None
+    else:
+        # Return cached data
+        if cache_key in _weather_cache:
+            cached_data, timestamp = _weather_cache[cache_key]
+            hours_old = (time.time() - timestamp) / 3600
+            logger.debug(f"Using cached weather for {city} ({hours_old:.1f}h old)")
+            return cached_data
+        
+        return None
 
 
 def calculate_prayer_times(date, location):
