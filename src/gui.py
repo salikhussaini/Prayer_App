@@ -638,10 +638,15 @@ class SettingsDialog(simpledialog.Dialog):
     def refresh_prayer_times(self):
         """Refresh prayer times for the selected city."""
         try:
-            selection = self.city_listbox.curselection()
             country = self.country_var.get()
             cities = self.country_cities.get(country, [])
-            city = cities[selection[0]] if selection else cities[0]
+            
+            selection = self.city_listbox.curselection()
+            if selection:
+                city = cities[selection[0]]
+            else:
+                # If no selection, use current_city or first city as fallback
+                city = self.current_city if self.current_city in cities else (cities[0] if cities else "")
             
             messagebox.showinfo("Refreshing", f"Fetching prayer times for {city}...\nPlease wait.")
             
@@ -994,6 +999,22 @@ class PrayerTimesFrame(tk.Frame):
                     logger.info(f"🔔 Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
+                # Failsafe: if we missed the alert window, trigger up to 60 seconds after prayer time
+                elif (-60 <= seconds_until < 0 and 
+                    prayer not in self.alerted_prayers and 
+                    self.prayer_alerts.get(prayer, True)):
+                    logger.warning(f"⚠️ Missed alert window for {prayer}, triggering failsafe (missed by {abs(seconds_until):.1f}s)")
+                    self.alert_user(prayer)
+                    self.alerted_prayers.add(prayer)
+                # Failsafe: if we missed the alert window, trigger up to 120 seconds after prayer time
+                elif (-120 <= seconds_until < 0 and 
+                    prayer not in self.alerted_prayers and 
+                    self.prayer_alerts.get(prayer, True)):
+                    logger.warning(f"⚠️ Missed alert window for {prayer}, triggering failsafe (missed by {abs(seconds_until):.1f}s)")
+                    self.alert_user(prayer)
+                    self.alerted_prayers.add(prayer)
+                
+                 
             except ValueError as e:
                 logger.warning(f"Error parsing prayer time '{time_str}' for '{prayer}': {e}")
                 continue
@@ -1109,11 +1130,11 @@ class PrayerTimesFrame(tk.Frame):
     def reset_alerts(self):
         """Reset all prayer alert tracking."""
         self.alerted_prayers.clear()
-        self.date = datetime.date.today()
+        self.date = core.get_current_time_with_offset().date()
         self.update_times()
         self.update_next_prayer()
         self.check_prayer_alerts()
-        logger.info(f"Prayer alerts reset for new day ({datetime.date.today()})")
+        logger.info(f"Prayer alerts reset for new day ({core.get_current_time_with_offset().date()})")
 
 
 # =====================================================================
@@ -1236,7 +1257,7 @@ class MainWindow(tk.Tk):
         self.weather_label.pack(fill="x", anchor="e", pady=(5, 0))
         
         self.prayer_frame = PrayerTimesFrame(
-            self, date=datetime.date.today(),
+            self, date=core.get_current_time_with_offset().date(),
             location={"city": self.city_var.get(), "country": self.country_var.get()},
             show_weather=saved_settings.get("show_weather", True),
             font_size=self.font_size,
@@ -1273,7 +1294,7 @@ class MainWindow(tk.Tk):
     def check_and_ensure_tomorrow_data(self, city, country):
         """Ensure prayer times for tomorrow are available."""
         try:
-            tomorrow = datetime.datetime.now().date() + timedelta(days=1)
+            tomorrow = core.get_current_time_with_offset().date() + timedelta(days=1)
             data = core.get_prayer_times_from_db(tomorrow, city)
             if data is None:
                 logger.info(f"No prayer times for {city} on {tomorrow}. Fetching...")
@@ -1348,7 +1369,7 @@ class MainWindow(tk.Tk):
 
     def update_hijri_date_from_db(self):
         """Fetch and display Hijri date."""
-        date = datetime.date.today()
+        date = core.get_current_time_with_offset().date()
         date_str = date.strftime(r"%b-%d-%Y")
         self.gregorian_label.config(text=date_str)
         

@@ -70,7 +70,7 @@ API_BACKOFF_BASE = 2
 # Prayer Times
 PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 PREFETCH_DAYS = 30
-ALERT_THRESHOLD_SECONDS = 30
+ALERT_THRESHOLD_SECONDS = 360
 
 # Default Location
 DEFAULT_COUNTRY = "USA"
