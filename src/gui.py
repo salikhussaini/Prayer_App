@@ -71,7 +71,8 @@ class SettingsDialog(simpledialog.Dialog):
                  current_method, current_school, current_font_size=None, current_volume=1.0,
                  current_window_state=None, current_start_minimized=False, current_alert_threshold=None,
                  current_prayer_alerts=None, current_athan_file=None, current_dua_file=None, current_show_weather=True,
-                 current_custom_font_sizes=None, current_linux_max_volume=False):
+                 current_custom_font_sizes=None, current_linux_max_volume=False, current_dialog_geometry=None,
+                 current_time_offset_hours=0, current_time_offset_minutes=0):
         self.country_cities = country_cities
         self.current_country = current_country
         self.current_city = current_city
@@ -90,6 +91,9 @@ class SettingsDialog(simpledialog.Dialog):
         self.current_prayer_alerts = current_prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
         self.current_show_weather = current_show_weather
         self.data_retention_days = core.load_settings().get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
+        self.current_dialog_geometry = current_dialog_geometry
+        self.current_time_offset_hours = current_time_offset_hours
+        self.current_time_offset_minutes = current_time_offset_minutes
         
         # Initialize custom font sizes from preset or provided values
         if current_custom_font_sizes is None:
@@ -102,6 +106,20 @@ class SettingsDialog(simpledialog.Dialog):
         
         self.result = None
         super().__init__(parent, title)
+        
+        # Restore dialog geometry if available (after dialog is fully initialized)
+        if self.current_dialog_geometry:
+            self.after(100, self._restore_geometry)
+
+    def _restore_geometry(self):
+        """Restore dialog geometry after it's fully initialized."""
+        if self.current_dialog_geometry:
+            try:
+                self.geometry(self.current_dialog_geometry)
+                logger.debug(f"Restored settings dialog geometry: {self.current_dialog_geometry}")
+            except Exception as e:
+                # Silently ignore geometry restoration errors - they're non-critical
+                logger.debug(f"Could not restore dialog geometry (non-critical): {e}")
 
     def body(self, master):
         notebook = ttk.Notebook(master)
@@ -131,7 +149,10 @@ class SettingsDialog(simpledialog.Dialog):
         # Tab 8: Data Management
         self.create_data_management_tab(notebook)
         
-        # Tab 9: About
+        # Tab 9: Testing
+        self.create_testing_tab(notebook)
+        
+        # Tab 10: About
         self.create_about_tab(notebook)
         
         return self.method_combo
@@ -358,6 +379,100 @@ class SettingsDialog(simpledialog.Dialog):
                       variable=self.start_minimized_var).grid(row=2, column=0, columnspan=2, 
                                                               sticky="w", padx=10, pady=3)
     
+    def update_volume_label(self, value):
+        """Update volume percentage label."""
+        volume_percent = int(float(value) * 100)
+        self.volume_label.config(text=f"{volume_percent}%")
+    
+    def test_athan_audio(self):
+        """Test play athan audio."""
+        self.play_test_audio(self.athan_file, "Athan")
+    
+    def test_fajr_audio(self):
+        """Test play fajr athan audio."""
+        self.play_test_audio(self.fajr_athan_file, "Fajr Athan")
+    
+    def test_dua_audio(self):
+        """Test play dua audio."""
+        self.play_test_audio(self.dua_file, "Dua")
+    
+    def play_test_audio(self, audio_path, audio_name):
+        """Play test audio file."""
+        if not os.path.exists(audio_path):
+            messagebox.showerror("Error", f"{audio_name} file not found: {audio_path}")
+            return
+        try:
+            volume = self.volume_var.get()
+            pygame.mixer.music.load(audio_path)
+            pygame.mixer.music.set_volume(volume)
+            pygame.mixer.music.play()
+            logger.info(f"Testing {audio_name} at volume {int(volume * 100)}%")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to play {audio_name}: {str(e)}")
+            logger.error(f"Error playing test audio: {e}")
+    
+    def select_athan_file(self):
+        """Select custom athan audio file."""
+        from tkinter import filedialog
+        file_path = filedialog.askopenfilename(title="Select Athan Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
+        if file_path:
+            self.athan_file = file_path
+            self.athan_file_display.config(text=os.path.basename(file_path))
+    
+    def select_dua_file(self):
+        """Select custom dua audio file."""
+        from tkinter import filedialog
+        file_path = filedialog.askopenfilename(title="Select Dua Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
+        if file_path:
+            self.dua_file = file_path
+            self.dua_file_display.config(text=os.path.basename(file_path))
+    
+    def apply(self):
+        """Apply all settings and prepare result."""
+        country = self.country_var.get()
+        cities = self.country_cities.get(country, [])
+        
+        selection = self.city_listbox.curselection()
+        if selection:
+            city = cities[selection[0]]
+        else:
+            # If no selection, use current_city or first city as fallback
+            city = self.current_city if self.current_city in cities else (cities[0] if cities else "")
+        
+        method_name = self.method_combo.get()
+        school_name = self.school_combo.get()
+        font_size = self.font_size_combo.get()
+        
+        # Collect custom font sizes from spinboxes
+        custom_sizes = {}
+        for key, spinbox_var in self.font_size_spinboxes.items():
+            custom_sizes[key] = spinbox_var.get()
+        
+        # Save dialog geometry
+        dialog_geometry = self.geometry()
+        
+        self.result = {
+            "country": country,
+            "city": city,
+            "method": self.method_options[method_name],
+            "school": self.school_options[school_name],
+            "font_size": font_size,
+            "custom_font_sizes": custom_sizes,
+            "volume": self.volume_var.get(),
+            "athan_file": self.athan_file,
+            "dua_file": self.dua_file,
+            "alert_threshold": self.alert_threshold_var.get(),
+            "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()},
+            "window_state": self.window_state_var.get(),
+            "start_minimized": self.start_minimized_var.get(),
+            "data_retention_days": self.data_retention_var.get(),
+            "show_weather": self.show_weather_var.get(),
+            "linux_max_volume": self.linux_max_volume_var.get(),
+            "dialog_geometry": dialog_geometry,
+            "time_offset_hours": self.time_offset_hours_var.get(),
+            "time_offset_minutes": self.time_offset_minutes_var.get()
+        }
+
     def create_data_management_tab(self, notebook):
         """Create Data Management tab."""
         data_frame = ttk.Frame(notebook)
@@ -418,6 +533,38 @@ class SettingsDialog(simpledialog.Dialog):
                 messagebox.showerror("Error", f"Failed to clear data: {str(e)}")
                 logger.error(f"Error clearing data: {e}")
     
+    
+    def create_testing_tab(self, notebook):
+        """Create Testing tab for debugging/testing features."""
+        testing_frame = ttk.Frame(notebook)
+        notebook.add(testing_frame, text="Testing")
+        
+        # Time Offset Header
+        tk.Label(testing_frame, text="Time Offset (for testing alerts):", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 10))
+        
+        tk.Label(testing_frame, text="Add time (for alert testing):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        
+        # Hours
+        tk.Label(testing_frame, text="Hours:").grid(row=2, column=0, sticky="w", padx=20, pady=5)
+        self.time_offset_hours_var = tk.IntVar(value=self.current_time_offset_hours)
+        hours_spin = ttk.Spinbox(testing_frame, from_=0, to=23, textvariable=self.time_offset_hours_var, width=10)
+        hours_spin.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        
+        # Minutes
+        tk.Label(testing_frame, text="Minutes:").grid(row=3, column=0, sticky="w", padx=20, pady=5)
+        self.time_offset_minutes_var = tk.IntVar(value=self.current_time_offset_minutes)
+        minutes_spin = ttk.Spinbox(testing_frame, from_=0, to=59, textvariable=self.time_offset_minutes_var, width=10)
+        minutes_spin.grid(row=3, column=1, sticky="w", padx=10, pady=5)
+        
+        # Info text
+        info_text = ("Set hours/minutes to advance the current time.\n"
+                     "Example: Set 1 hour and 30 minutes to test if alerts\n"
+                     "will trigger at that future time.\n\n"
+                     "⚠️ Leave at 0 for normal operation.")
+        tk.Label(testing_frame, text=info_text, font=("Segoe UI", 9), fg="#888888", justify="left").grid(row=4, column=0, columnspan=2, sticky="nw", padx=10, pady=(20, 5))
+        
+        testing_frame.grid_rowconfigure(5, weight=1)
+    
     def create_about_tab(self, notebook):
         """Create About tab showing current settings."""
         about_frame = ttk.Frame(notebook)
@@ -470,89 +617,6 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Label(about_frame, text="Credits:", font=("Segoe UI", 11, "bold"), fg=font_color).grid(row=10, column=0, columnspan=2, sticky="w", padx=10, pady=(20, 10))
         tk.Label(about_frame, text="Powered by Aladhan API", font=("Segoe UI", 9), fg=font_color).grid(row=11, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         tk.Label(about_frame, text="© 2026 Prayer Times App", font=("Segoe UI", 9), fg=font_color).grid(row=12, column=0, columnspan=2, sticky="w", padx=20, pady=2)
-    
-    def update_volume_label(self, value):
-        """Update volume percentage label."""
-        volume_percent = int(float(value) * 100)
-        self.volume_label.config(text=f"{volume_percent}%")
-    
-    def test_athan_audio(self):
-        """Test play athan audio."""
-        self.play_test_audio(self.athan_file, "Athan")
-    
-    def test_fajr_audio(self):
-        """Test play fajr athan audio."""
-        self.play_test_audio(self.fajr_athan_file, "Fajr Athan")
-    
-    def test_dua_audio(self):
-        """Test play dua audio."""
-        self.play_test_audio(self.dua_file, "Dua")
-    
-    def play_test_audio(self, audio_path, audio_name):
-        """Play test audio file."""
-        if not os.path.exists(audio_path):
-            messagebox.showerror("Error", f"{audio_name} file not found: {audio_path}")
-            return
-        try:
-            volume = self.volume_var.get()
-            pygame.mixer.music.load(audio_path)
-            pygame.mixer.music.set_volume(volume)
-            pygame.mixer.music.play()
-            logger.info(f"Testing {audio_name} at volume {int(volume * 100)}%")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to play {audio_name}: {str(e)}")
-            logger.error(f"Error playing test audio: {e}")
-    
-    def select_athan_file(self):
-        """Select custom athan audio file."""
-        from tkinter import filedialog
-        file_path = filedialog.askopenfilename(title="Select Athan Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
-        if file_path:
-            self.athan_file = file_path
-            self.athan_file_display.config(text=os.path.basename(file_path))
-    
-    def select_dua_file(self):
-        """Select custom dua audio file."""
-        from tkinter import filedialog
-        file_path = filedialog.askopenfilename(title="Select Dua Audio File", filetypes=[("Audio Files", "*.wav *.mp3 *.ogg"), ("All Files", "*.*")])
-        if file_path:
-            self.dua_file = file_path
-            self.dua_file_display.config(text=os.path.basename(file_path))
-    
-    def apply(self):
-        """Apply all settings and prepare result."""
-        selection = self.city_listbox.curselection()
-        country = self.country_var.get()
-        cities = self.country_cities.get(country, [])
-        city = cities[selection[0]] if selection else cities[0]
-        
-        method_name = self.method_combo.get()
-        school_name = self.school_combo.get()
-        font_size = self.font_size_combo.get()
-        
-        # Collect custom font sizes from spinboxes
-        custom_sizes = {}
-        for key, spinbox_var in self.font_size_spinboxes.items():
-            custom_sizes[key] = spinbox_var.get()
-        
-        self.result = {
-            "country": country,
-            "city": city,
-            "method": self.method_options[method_name],
-            "school": self.school_options[school_name],
-            "font_size": font_size,
-            "custom_font_sizes": custom_sizes,
-            "volume": self.volume_var.get(),
-            "athan_file": self.athan_file,
-            "dua_file": self.dua_file,
-            "alert_threshold": self.alert_threshold_var.get(),
-            "prayer_alerts": {prayer: var.get() for prayer, var in self.prayer_alerts.items()},
-            "window_state": self.window_state_var.get(),
-            "start_minimized": self.start_minimized_var.get(),
-            "data_retention_days": self.data_retention_var.get(),
-            "show_weather": self.show_weather_var.get(),
-            "linux_max_volume": self.linux_max_volume_var.get()
-        }
 
     def buttonbox(self):
         """Override buttonbox to add Refresh Prayer Times button."""
@@ -608,16 +672,11 @@ def show_error(message):
 class PrayerMenu:
     """Menu bar for prayer app."""
     
-    def __init__(self, master, country_var, city_var, country_cities,
-                 on_country_change, on_city_change, on_exit, on_settings=None):
+    def __init__(self, master, on_exit, on_settings=None, on_refresh=None):
         self.master = master
-        self.country_var = country_var
-        self.city_var = city_var
-        self.country_cities = country_cities
-        self.on_country_change = on_country_change
-        self.on_city_change = on_city_change
         self.on_exit = on_exit
         self.on_settings = on_settings
+        self.on_refresh = on_refresh
 
         self.menubar = tk.Menu(master, bg="#000000", fg="#FFFFFF")
         master.config(menu=self.menubar)
@@ -634,29 +693,13 @@ class PrayerMenu:
         self.menubar.add_command(label="Settings", 
                                 command=on_settings if on_settings else self.show_settings)
 
-    def open_location_dialog(self):
-        """Open unified settings dialog."""
-        # Delegate to the on_settings callback which is handled by MainWindow
-        if callable(self.on_settings):
-            self.on_settings()
-
     def refresh_prayer_times(self):
         """Refresh prayer times for the current city."""
         try:
-            city = self.city_var.get()
-            country = self.country_var.get()
-            messagebox.showinfo("Refreshing", f"Fetching prayer times for {city}...\nPlease wait.")
-            
-            # Fetch fresh data in background
-            threading.Thread(
-                target=core.ensure_future_data,
-                args=(city, country),
-                kwargs={"days": 30},
-                daemon=True
-            ).start()
-            
-            messagebox.showinfo("Success", f"Prayer times refresh started for {city}.")
-            logger.info(f"Initiated prayer times refresh for {city}, {country}")
+            if self.on_refresh:
+                self.on_refresh()
+            else:
+                messagebox.showinfo("Refresh", "Refresh callback not set.")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to refresh prayer times: {str(e)}")
             logger.error(f"Error refreshing prayer times: {e}")
@@ -683,18 +726,20 @@ class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
     now = datetime.datetime.now()
     
-    def __init__(self, master=None, date=None, location=None, show_weather=True, font_size="Medium", weather_label=None):
+    def __init__(self, master=None, date=None, location=None, show_weather=True, font_size="Medium", weather_label=None, prayer_alerts=None, audio_volume=1.0):
         super().__init__(master, bg="#000000")
         self.date = date
         self.show_weather = show_weather
         self.font_size = font_size
+        self.weather_label = weather_label
         self.weather_data = None
-        self.weather_label = weather_label  # Reference to MainWindow's weather label
+        self.prayer_alerts = prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
+        self.audio_volume = audio_volume
         
         try:
             pygame.mixer.quit()
             pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
-            pygame.mixer.music.set_volume(1.0)
+            pygame.mixer.music.set_volume(audio_volume)
             logger.info("Pygame mixer initialized successfully")
             self._test_audio_files()
         except Exception as e:
@@ -766,15 +811,15 @@ class PrayerTimesFrame(tk.Frame):
         all_exist = True
         for name, path in audio_files:
             if os.path.exists(path):
-                logger.info(f"[OK] {name} audio file found: {path}")
+                logger.info(f"✅ {name} audio file found: {path}")
             else:
-                logger.error(f"[ERROR] {name} audio file MISSING: {path}")
+                logger.error(f"❌ {name} audio file MISSING: {path}")
                 all_exist = False
         
         if all_exist:
-            logger.info("[OK] All audio files verified")
+            logger.info("✅ All audio files verified")
         else:
-            logger.warning("[WARNING] Some audio files missing")
+            logger.warning("⚠️ Some audio files missing")
 
     def _init_labels(self):
         """Initialize prayer time label widgets."""
@@ -801,7 +846,7 @@ class PrayerTimesFrame(tk.Frame):
         
     def update_clock(self):
         """Update the clock label every second."""
-        PrayerTimesFrame.now = datetime.datetime.now()
+        PrayerTimesFrame.now = core.get_current_time_with_offset()
         self.now = PrayerTimesFrame.now
         self.after(1000, self.update_clock)
 
@@ -853,7 +898,7 @@ class PrayerTimesFrame(tk.Frame):
 
     def update_next_prayer(self):
         """Calculate and display the time remaining until next prayer."""
-        now = datetime.datetime.now()
+        now = core.get_current_time_with_offset()
         next_prayer = None
         min_delta = None
 
@@ -875,23 +920,23 @@ class PrayerTimesFrame(tk.Frame):
             total_seconds = int(min_delta.total_seconds())
             if total_seconds < 60:
                 self.next_prayer_label.config(
-                    text=f"Next prayer: {next_prayer} in {total_seconds} seconds...")
+                    text=f"{next_prayer} in {total_seconds} seconds...")
                 self.after(1000, self.update_next_prayer)
             elif total_seconds < 3600:
                 minutes, seconds = divmod(total_seconds, 60)
                 self.next_prayer_label.config(
-                    text=f"Next prayer: {next_prayer} in {minutes}m {seconds}s")
+                    text=f"{next_prayer} in {minutes}m {seconds}s")
                 self.after(1000, self.update_next_prayer)
             else:
                 hours, minutes = self.format_time_delta(min_delta)
                 self.next_prayer_label.config(
-                    text=f"Next prayer: {next_prayer} in {hours}h {minutes}m")
+                    text=f"{next_prayer} in {hours}h {minutes}m")
                 self.after(60000, self.update_next_prayer)
             self.highlight_next_prayer(next_prayer)
             return
 
         try:
-            now = datetime.datetime.now()
+            now = core.get_current_time_with_offset()
             tomorrow = now.date() + datetime.timedelta(days=1)
             tomorrow_times = core.calculate_prayer_times(tomorrow, self.location)
             fajr_time_str = tomorrow_times.get("Fajr")
@@ -904,7 +949,7 @@ class PrayerTimesFrame(tk.Frame):
 
                 hours, minutes = self.format_time_delta(delta)
                 self.next_prayer_label.config(
-                    text=f"Next prayer: Fajr (tomorrow) in {hours}h {minutes}m")
+                    text=f"Fajr (tomorrow) in {hours}h {minutes}m")
 
                 if total_seconds < 3600:
                     self.after(1000, self.update_next_prayer)
@@ -919,7 +964,7 @@ class PrayerTimesFrame(tk.Frame):
 
     def check_prayer_alerts(self):
         """Monitor prayer times and trigger alerts."""
-        now = datetime.datetime.now()
+        now = core.get_current_time_with_offset()
         next_prayer_to_alert = None
         min_delta = None
 
@@ -942,11 +987,11 @@ class PrayerTimesFrame(tk.Frame):
                     min_delta = seconds_until
                     next_prayer_to_alert = prayer
                 
-                # Check if prayer is within alert threshold (30 seconds before) AND prayer alerts are enabled
+                # Check if prayer is within alert threshold AND prayer alerts are enabled
                 if (0 <= seconds_until <= core.ALERT_THRESHOLD_SECONDS and 
                     prayer not in self.alerted_prayers and 
                     self.prayer_alerts.get(prayer, True)):
-                    logger.info(f"[ALERT] Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
+                    logger.info(f"🔔 Prayer alert triggered for {prayer} (in {seconds_until:.1f} seconds)")
                     self.alert_user(prayer)
                     self.alerted_prayers.add(prayer)
             except ValueError as e:
@@ -989,7 +1034,7 @@ class PrayerTimesFrame(tk.Frame):
 
     def alert_user(self, prayer):
         """Play alert sounds for prayer notification."""
-        logger.info(f"[ALERT] Starting alert sequence for {prayer} prayer")
+        logger.info(f"🔔 Starting alert sequence for {prayer} prayer")
         
         dua_path = str(core.PROJECT_ROOT / "src/assets/dua.wav")
         if prayer == "Fajr":
@@ -1003,11 +1048,11 @@ class PrayerTimesFrame(tk.Frame):
     def play_alert_audio(self, athan_path, dua_path):
         """Play audio files sequentially in the main thread (thread-safe)."""
         if not os.path.exists(athan_path):
-            logger.warning(f"[ERROR] Athan file not found: {athan_path}")
+            logger.warning(f"❌ Athan file not found: {athan_path}")
             return
         
         try:
-            logger.info(f"[AUDIO] Playing athan: {athan_path}")
+            logger.info(f"🔊 Playing athan: {athan_path}")
             pygame.mixer.music.load(athan_path)
             pygame.mixer.music.play()
             
@@ -1017,33 +1062,33 @@ class PrayerTimesFrame(tk.Frame):
             
             # Schedule dua playback after athan finishes
             self.after(delay_ms, lambda: self.play_dua_audio(dua_path))
-            logger.info(f"[OK] Athan scheduled (duration: {audio_length:.1f}s)")
+            logger.info(f"✅ Athan scheduled (duration: {audio_length:.1f}s)")
             
         except pygame.error as e:
-            logger.error(f"[ERROR] Pygame error loading athan: {e}")
+            logger.error(f"❌ Pygame error loading athan: {e}")
         except Exception as e:
-            logger.error(f"[ERROR] Error playing athan: {e}")
+            logger.error(f"❌ Error playing athan: {e}")
 
     def play_dua_audio(self, dua_path):
         """Play dua audio file."""
         if not os.path.exists(dua_path):
-            logger.warning(f"[ERROR] Dua file not found: {dua_path}")
+            logger.warning(f"❌ Dua file not found: {dua_path}")
             return
         
         try:
-            logger.info(f"[AUDIO] Playing dua: {dua_path}")
+            logger.info(f"🔊 Playing dua: {dua_path}")
             pygame.mixer.music.load(dua_path)
             pygame.mixer.music.play()
-            logger.info(f"[OK] Dua playing")
+            logger.info(f"✅ Dua playing")
             
         except pygame.error as e:
-            logger.error(f"[ERROR] Pygame error loading dua: {e}")
+            logger.error(f"❌ Pygame error loading dua: {e}")
         except Exception as e:
-            logger.error(f"[ERROR] Error playing dua: {e}")
+            logger.error(f"❌ Error playing dua: {e}")
 
     def schedule_midnight_reset(self):
         """Schedule daily reset of prayer alerts at midnight."""
-        now = datetime.datetime.now()
+        now = core.get_current_time_with_offset()
         tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
         ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
@@ -1055,7 +1100,7 @@ class PrayerTimesFrame(tk.Frame):
         self.update_times()
         self.update_next_prayer()
 
-        now = datetime.datetime.now()
+        now = core.get_current_time_with_offset()
         tomorrow = now + datetime.timedelta(days=1)
         next_midnight = datetime.datetime.combine(tomorrow.date(), datetime.time.min)
         ms_until_midnight = int((next_midnight - now).total_seconds() * 1000)
@@ -1117,7 +1162,7 @@ class MainWindow(tk.Tk):
         self.api_method = saved_settings["method"]
         self.api_school = saved_settings["school"]
         self.font_size = saved_settings["font_size"]
-        self.custom_font_sizes = saved_settings.get("custom_font_sizes", core.FONT_SIZES.get(self.font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE]).copy())
+        self.custom_font_sizes = saved_settings.get("custom_font_sizes", core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"]))
         self.audio_volume = saved_settings["volume"]
         self.athan_file = saved_settings["athan_file"]
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
@@ -1127,18 +1172,25 @@ class MainWindow(tk.Tk):
         self.window_state = saved_settings["window_state"]
         self.start_minimized = saved_settings["start_minimized"]
         self.window_geometry = saved_settings["window_geometry"]
-        self.data_retention_days = data_retention_days
+        self.data_retention_days = saved_settings.get("data_retention_days", core.DEFAULT_DATA_RETENTION_DAYS)
         self.show_weather = saved_settings.get("show_weather", True)
         self.linux_max_volume = saved_settings.get("linux_max_volume", False)
+        
+        # Load and apply time offset for alert testing
+        core.TIME_OFFSET = {
+            "hours": saved_settings.get("time_offset_hours", 0),
+            "minutes": saved_settings.get("time_offset_minutes", 0)
+        }
+        if core.TIME_OFFSET["hours"] != 0 or core.TIME_OFFSET["minutes"] != 0:
+            logger.info(f"⏰ Loaded time offset: +{core.TIME_OFFSET['hours']}h {core.TIME_OFFSET['minutes']}m")
         
         # Set system volume to 100% on Linux if enabled
         if self.linux_max_volume:
             threading.Thread(target=core.set_system_volume_linux, args=(100,), daemon=True).start()
         
         self.menu = PrayerMenu(
-            self, self.country_var, self.city_var, COUNTRY_CITIES,
-            self.on_country_change_menu, self.update_prayer_frame_location,
-            self.quit, on_settings=self.open_settings
+            self,
+            self.quit, on_settings=self.open_settings, on_refresh=self.refresh_prayer_times_menu
         )
 
         # Apply window state
@@ -1186,9 +1238,11 @@ class MainWindow(tk.Tk):
         self.prayer_frame = PrayerTimesFrame(
             self, date=datetime.date.today(),
             location={"city": self.city_var.get(), "country": self.country_var.get()},
-            show_weather=self.show_weather,
+            show_weather=saved_settings.get("show_weather", True),
             font_size=self.font_size,
-            weather_label=self.weather_label
+            weather_label=self.weather_label,
+            prayer_alerts=saved_settings.get("prayer_alerts", {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}),
+            audio_volume=saved_settings.get("volume", 1.0)
         )
         self.prayer_frame.grid(row=1, column=0, pady=10, sticky="nsew")
         
@@ -1309,18 +1363,35 @@ class MainWindow(tk.Tk):
         else:
             self.hijri_label.config(text="Hijri date not found")
 
-    def on_country_change_menu(self):
-        """Handle country selection change."""
-        country = self.country_var.get()
-        if country not in COUNTRY_CITIES:
-            logger.warning(f"Invalid country selected: {country}")
-            return
-        cities = COUNTRY_CITIES[country]
-        self.city_var.set(cities[0])
-        self.update_prayer_frame_location()
+    def refresh_prayer_times_menu(self):
+        """Refresh prayer times for current location."""
+        try:
+            city = self.city_var.get()
+            country = self.country_var.get()
+            messagebox.showinfo("Refreshing", f"Fetching prayer times for {city}...\nPlease wait.")
+            
+            # Fetch fresh data in background
+            threading.Thread(
+                target=core.ensure_future_data,
+                args=(city, country),
+                kwargs={"days": 30},
+                daemon=True
+            ).start()
+            
+            messagebox.showinfo("Success", f"Prayer times refresh started for {city}.")
+            logger.info(f"Initiated prayer times refresh for {city}, {country}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh prayer times: {str(e)}")
+            logger.error(f"Error refreshing prayer times: {e}")
 
     def open_settings(self):
         """Open unified settings dialog."""
+        # Load saved dialog geometry and time offset
+        saved_settings = core.load_settings()
+        dialog_geometry = saved_settings.get("settings_dialog_geometry")
+        time_offset_hours = saved_settings.get("time_offset_hours", 0)
+        time_offset_minutes = saved_settings.get("time_offset_minutes", 0)
+        
         dialog = SettingsDialog(self, "Settings", COUNTRY_CITIES,
                                self.country_var.get(), self.city_var.get(),
                                self.api_method, self.api_school, 
@@ -1328,7 +1399,8 @@ class MainWindow(tk.Tk):
                                self.window_state, self.start_minimized,
                                self.alert_threshold, self.prayer_alerts,
                                self.athan_file, self.dua_file, self.show_weather,
-                               self.custom_font_sizes, self.linux_max_volume)
+                               self.custom_font_sizes, self.linux_max_volume, dialog_geometry,
+                               time_offset_hours, time_offset_minutes)
         if dialog.result:
             try:
                 # Update location
@@ -1364,6 +1436,13 @@ class MainWindow(tk.Tk):
                 # Update data management
                 self.data_retention_days = dialog.result["data_retention_days"]
                 
+                # Update time offset for alert testing
+                time_offset_hours = dialog.result.get("time_offset_hours", 0)
+                time_offset_minutes = dialog.result.get("time_offset_minutes", 0)
+                core.TIME_OFFSET = {"hours": time_offset_hours, "minutes": time_offset_minutes}
+                if time_offset_hours != 0 or time_offset_minutes != 0:
+                    logger.info(f"⏰ Time offset set to +{time_offset_hours}h {time_offset_minutes}m for testing")
+                
                 # Update display settings
                 self.show_weather = dialog.result.get("show_weather", True)
                 self.prayer_frame.show_weather = self.show_weather
@@ -1376,6 +1455,9 @@ class MainWindow(tk.Tk):
                 core.API_SCHOOL = self.api_school
                 core.ALERT_THRESHOLD_SECONDS = self.alert_threshold
                 
+                # Update prayer frame with new settings
+                self.prayer_frame.prayer_alerts = self.prayer_alerts
+                self.prayer_frame.audio_volume = self.audio_volume
                 pygame.mixer.music.set_volume(self.audio_volume)
                 
                 logger.info(f"Settings updated: Country={dialog.result['country']}, "
@@ -1383,11 +1465,13 @@ class MainWindow(tk.Tk):
                           f"School={self.api_school}, Font Size={self.font_size}, "
                           f"Volume={int(self.audio_volume * 100)}%, "
                           f"Alert Threshold={self.alert_threshold}s, "
-                          f"Window State={self.window_state}, Start Minimized={self.start_minimized}, "
-                          f"Data Retention={self.data_retention_days}d")
+                          f"Window State={self.window_state}, Start Minimized={self.start_minimized}")
                 
                 # Get current window geometry
                 window_geometry, current_state = self.save_window_state()
+                
+                # Get custom font sizes if using custom
+                custom_font_sizes = self.custom_font_sizes if hasattr(self, 'custom_font_sizes') else core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"])
                 
                 # Save settings to cache
                 core.save_settings({
@@ -1396,7 +1480,7 @@ class MainWindow(tk.Tk):
                     "method": self.api_method,
                     "school": self.api_school,
                     "font_size": self.font_size,
-                    "custom_font_sizes": self.custom_font_sizes,
+                    "custom_font_sizes": custom_font_sizes,
                     "volume": self.audio_volume,
                     "athan_file": self.athan_file,
                     "dua_file": self.dua_file,
@@ -1407,7 +1491,10 @@ class MainWindow(tk.Tk):
                     "window_geometry": window_geometry,
                     "data_retention_days": self.data_retention_days,
                     "show_weather": self.show_weather,
-                    "linux_max_volume": self.linux_max_volume
+                    "linux_max_volume": self.linux_max_volume,
+                    "settings_dialog_geometry": dialog.result.get("dialog_geometry"),
+                    "time_offset_hours": dialog.result.get("time_offset_hours", 0),
+                    "time_offset_minutes": dialog.result.get("time_offset_minutes", 0)
                 })
                 
                 # Update prayer frame location and refresh weather
@@ -1445,7 +1532,7 @@ class MainWindow(tk.Tk):
             
             # Update weather label font
             if self.show_weather:
-                self.weather_label.config(font=("Segoe UI", sizes["weather"]))
+                self.weather_label.config(font=("Segoe UI", sizes.get("weather", 12)))
             
             for prayer in self.prayer_frame.PRAYERS:
                 # Get prayer name label from frame (first widget is name, second is time)
@@ -1503,35 +1590,7 @@ class MainWindow(tk.Tk):
             logger.error(f"Error saving window state: {e}", exc_info=True)
             return None, "windowed"
 
-    def update_prayer_frame_location(self):
-        """Update prayer frame with new location."""
-        self.prayer_frame.location = {
-            "city": self.city_var.get(),
-            "country": self.country_var.get()
-        }
-        self.prayer_frame.update_times()
-        
-        # Save location change to settings
-        window_geometry, current_state = self.save_window_state()
-        core.save_settings({
-            "country": self.country_var.get(),
-            "city": self.city_var.get(),
-            "method": self.api_method,
-            "school": self.api_school,
-            "font_size": self.font_size,
-            "custom_font_sizes": self.custom_font_sizes,
-            "volume": self.audio_volume,
-            "athan_file": self.athan_file,
-            "dua_file": self.dua_file,
-            "alert_threshold": self.alert_threshold,
-            "prayer_alerts": self.prayer_alerts,
-            "window_state": self.window_state,
-            "start_minimized": self.start_minimized,
-            "window_geometry": window_geometry,
-            "data_retention_days": self.data_retention_days,
-            "show_weather": self.show_weather,
-            "linux_max_volume": self.linux_max_volume
-        })
+
 
     def refresh_prayer_times(self):
         """Force refresh of prayer times."""

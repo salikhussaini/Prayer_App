@@ -8,15 +8,14 @@ import requests
 import logging
 import logging.handlers
 import time
-import threading
 import os
 import subprocess
 import platform
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 from datetime import datetime, timedelta, date
 import re
-import json
 
 
 # =====================================================================
@@ -73,25 +72,15 @@ PRAYER_NAMES = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 PREFETCH_DAYS = 30
 ALERT_THRESHOLD_SECONDS = 30
 
-# Weather Configuration
-WEATHER_CACHE_TTL = 86400  # Cache weather for 24 hours (one full day)
-WEATHER_TIMEOUT = 5  # Weather API timeout in seconds
-WEATHER_MORNING_HOUR = 6  # Fetch morning weather at 6 AM
-WEATHER_EVENING_HOUR = 18  # Fetch evening weather at 6 PM
-WEATHER_MORNING_WINDOW = 3  # Allow fetch between 6 AM - 9 AM
-WEATHER_EVENING_WINDOW = 3  # Allow fetch between 6 PM - 9 PM
-_weather_cache = {}
-_weather_fetch_times = {}  # Track when weather was fetched per period
-
 # Default Location
 DEFAULT_COUNTRY = "USA"
 DEFAULT_CITY = "Chicago"
 
 # UI Configuration
 FONT_SIZES = {
-    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40, "weather": 40},
-    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50, "weather": 50},
-    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60, "weather": 60}
+    "Small": {"clock": 85, "prayer_name": 18, "prayer_time": 33, "next_prayer": 32, "date": 40, "weather": 10},
+    "Medium": {"clock": 110, "prayer_name": 22, "prayer_time": 40, "next_prayer": 42, "date": 50, "weather": 12},
+    "Large": {"clock": 140, "prayer_name": 28, "prayer_time": 50, "next_prayer": 52, "date": 60, "weather": 16}
 }
 DEFAULT_FONT_SIZE = "Medium"
 
@@ -102,6 +91,10 @@ DEFAULT_WINDOW_GEOMETRY = None  # Will be set at runtime
 
 # Data Management
 DEFAULT_DATA_RETENTION_DAYS = 30  # Automatically clean up data older than this
+
+# Time Testing/Override (for testing athan alerts without waiting)
+# Format: {"hours": 0, "minutes": 0} to override current time
+TIME_OFFSET = {"hours": 0, "minutes": 0}  # Global offset from current time
 
 class Colors:
     BACKGROUND = "#000000"
@@ -133,6 +126,17 @@ AUDIO_FILES = {
     "fajr_athan": "src/assets/fajr_athan.wav",
     "dua": "src/assets/dua.wav",
 }
+
+# Weather Configuration
+WEATHER_TIMEOUT = 10
+WEATHER_MORNING_HOUR = 6
+WEATHER_MORNING_WINDOW = 3  # 6-9 AM
+WEATHER_EVENING_HOUR = 18
+WEATHER_EVENING_WINDOW = 3  # 6-9 PM
+
+# Weather cache: {city:country -> (data, timestamp)}
+_weather_cache = {}
+_weather_fetch_times = {}  # Track fetch times per window
 
 
 # =====================================================================
@@ -307,113 +311,6 @@ def get_prayer_times_range_from_db(start_date, end_date, city):
                 "Maghrib": row[4], "Isha": row[5]
             }
     return result
-
-
-def cleanup_old_prayer_data(retention_days=DEFAULT_DATA_RETENTION_DAYS):
-    """Delete prayer data older than retention_days."""
-    try:
-        cutoff_date = (datetime.now() - timedelta(days=retention_days)).strftime("%Y-%m-%d")
-        
-        with _db_manager.get_cursor() as cursor:
-            cursor.execute("DELETE FROM prayer_times WHERE date < ?", (cutoff_date,))
-            deleted_count = cursor.rowcount
-        
-        if deleted_count > 0:
-            logger.info(f"[OK] Cleaned up {deleted_count} old prayer records (older than {retention_days} days)")
-        else:
-            logger.debug(f"No old prayer records to clean (retention: {retention_days} days)")
-        
-        return deleted_count
-    except Exception as e:
-        logger.error(f"Error cleaning up old prayer data: {e}")
-        raise
-
-
-def get_database_size():
-    """Get current database size in MB."""
-    try:
-        db_path = Path(DB_PATH)
-        if db_path.exists():
-            size_bytes = db_path.stat().st_size
-            size_mb = size_bytes / (1024 * 1024)
-            return round(size_mb, 2)
-    except Exception as e:
-        logger.error(f"Error getting database size: {e}")
-    return 0
-
-
-def clear_all_prayer_data():
-    """Completely clear all prayer data from database."""
-    try:
-        with _db_manager.get_cursor() as cursor:
-            cursor.execute("DELETE FROM prayer_times")
-            deleted_count = cursor.rowcount
-        
-        logger.info(f"[OK] Cleared all prayer data ({deleted_count} records deleted)")
-        return deleted_count
-    except Exception as e:
-        logger.error(f"Error clearing prayer data: {e}")
-        raise
-
-
-def get_prayer_data_stats():
-    """Get statistics about stored prayer data."""
-    try:
-        with _db_manager.get_cursor() as cursor:
-            # Total records
-            cursor.execute("SELECT COUNT(*) FROM prayer_times")
-            total_records = cursor.fetchone()[0]
-            
-            # Unique cities
-            cursor.execute("SELECT COUNT(DISTINCT city) FROM prayer_times")
-            unique_cities = cursor.fetchone()[0]
-            
-            # Date range
-            cursor.execute("SELECT MIN(date), MAX(date) FROM prayer_times")
-            result = cursor.fetchone()
-            earliest_date = result[0] if result[0] else "N/A"
-            latest_date = result[1] if result[1] else "N/A"
-        
-        return {
-            "total_records": total_records,
-            "unique_cities": unique_cities,
-            "earliest_date": earliest_date,
-            "latest_date": latest_date,
-            "database_size_mb": get_database_size()
-        }
-    except Exception as e:
-        logger.error(f"Error getting prayer data stats: {e}")
-        return {}
-
-
-def schedule_periodic_cleanup(retention_days=DEFAULT_DATA_RETENTION_DAYS, check_interval_hours=24):
-    """Schedule periodic cleanup of old prayer data.
-    
-    Args:
-        retention_days: Days to keep data before deletion
-        check_interval_hours: Hours between cleanup checks (default 24)
-    
-    Note: This runs in a daemon thread and will continue until app exits.
-    """
-    def cleanup_loop():
-        logger.info(f"📋 Periodic cleanup scheduler started (runs every {check_interval_hours}h, keeps {retention_days}d)")
-        while True:
-            try:
-                # Sleep for specified interval
-                sleep_seconds = check_interval_hours * 3600
-                time.sleep(sleep_seconds)
-                
-                # Run cleanup
-                cleanup_old_prayer_data(retention_days)
-            except Exception as e:
-                logger.error(f"Error in periodic cleanup loop: {e}")
-                # Continue the loop even on error
-                time.sleep(60)
-    
-    # Start daemon thread for cleanup
-    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True, name="PrayerDataCleanupThread")
-    cleanup_thread.start()
-    logger.info("🧹 Prayer data periodic cleanup thread started")
 
 
 # =====================================================================
@@ -758,9 +655,26 @@ def check_for_updates():
 # HELPER FUNCTIONS
 # =====================================================================
 
+def get_current_time_with_offset():
+    """Get current time, optionally offset for testing (e.g., to test alert timing).
+    
+    Returns:
+        datetime: Current time plus any configured offset
+    
+    Note: This is used instead of datetime.now() to allow time testing.
+    """
+    now = datetime.now()
+    if TIME_OFFSET["hours"] != 0 or TIME_OFFSET["minutes"] != 0:
+        now = now + timedelta(hours=TIME_OFFSET["hours"], minutes=TIME_OFFSET["minutes"])
+        offset_str = f"+{TIME_OFFSET['hours']}h {TIME_OFFSET['minutes']}m"
+        logger.debug(f"⏰ Time offset applied: {offset_str} (now={now.strftime('%H:%M:%S')})")
+    return now
+
+
 def save_settings(settings):
     """Save settings to JSON file in data cache."""
     try:
+        import json
         with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
         logger.info(f"Settings saved to {SETTINGS_FILE}")
@@ -788,10 +702,14 @@ def load_settings():
         "window_geometry": DEFAULT_WINDOW_GEOMETRY,
         "data_retention_days": DEFAULT_DATA_RETENTION_DAYS,
         "show_weather": True,
-        "linux_max_volume": False
+        "linux_max_volume": False,
+        "settings_dialog_geometry": None,
+        "time_offset_hours": 0,
+        "time_offset_minutes": 0
     }
     
     try:
+        import json
         if SETTINGS_FILE.exists():
             with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
@@ -805,6 +723,147 @@ def load_settings():
     
     # Return default settings
     return defaults
+
+
+def calculate_prayer_times(date, location):
+    """Calculate prayer times for a given date and location."""
+    city = location.get("city", "")
+    country = location.get("country", "")
+    
+    times = get_prayer_times_from_db(date, city)
+
+    if times:
+        logger.debug(f"Found prayer times for {city} in database for {date}")
+        return times
+
+    logger.info(f"No data found for {city}, {country} on {date}. Attempting to fetch...")
+    try:
+        ensure_future_data(city=city, country=country, days=7)
+        times = get_prayer_times_from_db(date, city)
+        if times:
+            logger.info(f"Successfully fetched prayer times for {city}, {country} on {date}")
+            return times
+        else:
+            logger.warning(f"Data not found after prefetch. Attempting direct API call...")
+            times = fetch_prayer_times_from_api(date, city, country)
+            return times
+    except PrayerAPIException as e:
+        logger.error(f"API error fetching prayer times for {city}, {country} on {date}: {e}")
+        raise Exception(f"Failed to fetch prayer times for {city}: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error calculating prayer times: {e}", exc_info=True)
+        raise Exception(f"Failed to calculate prayer times: {str(e)}")
+
+
+# =====================================================================
+# DATA MANAGEMENT FUNCTIONS
+# =====================================================================
+
+def cleanup_old_prayer_data(retention_days=DEFAULT_DATA_RETENTION_DAYS):
+    """Delete prayer data older than retention_days."""
+    try:
+        cutoff_date = (datetime.now() - timedelta(days=retention_days)).strftime("%Y-%m-%d")
+        
+        with _db_manager.get_cursor() as cursor:
+            cursor.execute("DELETE FROM prayer_times WHERE date < ?", (cutoff_date,))
+            deleted_count = cursor.rowcount
+        
+        if deleted_count > 0:
+            logger.info(f"[OK] Cleaned up {deleted_count} old prayer records (older than {retention_days} days)")
+        else:
+            logger.debug(f"No old prayer records to clean (retention: {retention_days} days)")
+        
+        return deleted_count
+    except Exception as e:
+        logger.error(f"Error cleaning up old prayer data: {e}")
+        raise
+
+
+def get_database_size():
+    """Get current database size in MB."""
+    try:
+        db_path = Path(DB_PATH)
+        if db_path.exists():
+            size_bytes = db_path.stat().st_size
+            size_mb = size_bytes / (1024 * 1024)
+            return round(size_mb, 2)
+    except Exception as e:
+        logger.error(f"Error getting database size: {e}")
+    return 0
+
+
+def clear_all_prayer_data():
+    """Completely clear all prayer data from database."""
+    try:
+        with _db_manager.get_cursor() as cursor:
+            cursor.execute("DELETE FROM prayer_times")
+            deleted_count = cursor.rowcount
+        
+        logger.info(f"[OK] Cleared all prayer data ({deleted_count} records deleted)")
+        return deleted_count
+    except Exception as e:
+        logger.error(f"Error clearing prayer data: {e}")
+        raise
+
+
+def get_prayer_data_stats():
+    """Get statistics about stored prayer data."""
+    try:
+        with _db_manager.get_cursor() as cursor:
+            # Total records
+            cursor.execute("SELECT COUNT(*) FROM prayer_times")
+            total_records = cursor.fetchone()[0]
+            
+            # Unique cities
+            cursor.execute("SELECT COUNT(DISTINCT city) FROM prayer_times")
+            unique_cities = cursor.fetchone()[0]
+            
+            # Date range
+            cursor.execute("SELECT MIN(date), MAX(date) FROM prayer_times")
+            result = cursor.fetchone()
+            earliest_date = result[0] if result[0] else "N/A"
+            latest_date = result[1] if result[1] else "N/A"
+        
+        return {
+            "total_records": total_records,
+            "unique_cities": unique_cities,
+            "earliest_date": earliest_date,
+            "latest_date": latest_date,
+            "database_size_mb": get_database_size()
+        }
+    except Exception as e:
+        logger.error(f"Error getting prayer data stats: {e}")
+        return {}
+
+
+def schedule_periodic_cleanup(retention_days=DEFAULT_DATA_RETENTION_DAYS, check_interval_hours=24):
+    """Schedule periodic cleanup of old prayer data.
+    
+    Args:
+        retention_days: Days to keep data before deletion
+        check_interval_hours: Hours between cleanup checks (default 24)
+    
+    Note: This runs in a daemon thread and will continue until app exits.
+    """
+    def cleanup_loop():
+        logger.info(f"📋 Periodic cleanup scheduler started (runs every {check_interval_hours}h, keeps {retention_days}d)")
+        while True:
+            try:
+                # Sleep for specified interval
+                sleep_seconds = check_interval_hours * 3600
+                time.sleep(sleep_seconds)
+                
+                # Run cleanup
+                cleanup_old_prayer_data(retention_days)
+            except Exception as e:
+                logger.error(f"Error in periodic cleanup loop: {e}")
+                # Continue the loop even on error
+                time.sleep(60)
+    
+    # Start daemon thread for cleanup
+    cleanup_thread = threading.Thread(target=cleanup_loop, daemon=True, name="PrayerDataCleanupThread")
+    cleanup_thread.start()
+    logger.info("🧹 Prayer data periodic cleanup thread started")
 
 
 # =====================================================================
@@ -967,32 +1026,25 @@ def fetch_weather(city, country):
 
 
 def set_system_volume_linux(volume_percent=100):
-    """Set system volume to specified percentage on Linux (useful for ensuring alerts are audible).
+    """Set system volume to specified percentage on Linux (optimized for Raspberry Pi/RPi Zero).
+    
+    Tries multiple methods to find the available audio system:
+    1. amixer (standard ALSA - most reliable on RPi)
+    2. pactl (PulseAudio/PipeWire)
+    3. pacmd (PulseAudio daemon)
+    4. amixer with explicit card selection
     
     Args:
         volume_percent: Volume percentage (0-100), default 100%
     
-    Note: This only works on Linux and requires 'pactl' or 'amixer' to be installed.
+    Note: This only works on Linux (Raspberry Pi, Debian, Ubuntu, etc).
     """
     if platform.system() != "Linux":
         logger.debug("System volume adjustment skipped (not on Linux)")
         return False
     
     try:
-        # Try using pactl first (PulseAudio/PipeWire)
-        try:
-            # Get default sink (output device)
-            result = subprocess.run(
-                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"],
-                capture_output=True, timeout=5
-            )
-            if result.returncode == 0:
-                logger.info(f"[OK] System volume set to {volume_percent}% using pactl")
-                return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-        
-        # Fallback to amixer (ALSA)
+        # Method 1: Try amixer first (standard on all Linux, especially RPi)
         try:
             result = subprocess.run(
                 ["amixer", "-q", "sset", "Master", f"{volume_percent}%"],
@@ -1004,39 +1056,47 @@ def set_system_volume_linux(volume_percent=100):
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
         
-        logger.warning("Could not set system volume: pactl and amixer not found or failed")
+        # Method 2: Try pactl (PulseAudio/PipeWire)
+        try:
+            result = subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume_percent}%"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"[OK] System volume set to {volume_percent}% using pactl")
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        # Method 3: Try pacmd (PulseAudio daemon)
+        try:
+            pa_volume = str(int(volume_percent * 65536 / 100))
+            result = subprocess.run(
+                ["pacmd", "set-sink-volume", "0", pa_volume],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"[OK] System volume set to {volume_percent}% using pacmd")
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        # Method 4: Try amixer with explicit card 0 (for multi-audio RPi systems)
+        try:
+            result = subprocess.run(
+                ["amixer", "-q", "-c", "0", "sset", "Master", f"{volume_percent}%"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"[OK] System volume set to {volume_percent}% using amixer card 0")
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        logger.warning("Could not set system volume: amixer, pactl, pacmd all failed or not found. This may be normal on RPi Zero - audio output may require manual configuration.")
         return False
         
     except Exception as e:
         logger.error(f"Error setting system volume on Linux: {e}")
         return False
 
-
-def calculate_prayer_times(date, location):
-    """Calculate prayer times for a given date and location."""
-    city = location.get("city", "")
-    country = location.get("country", "")
-    
-    times = get_prayer_times_from_db(date, city)
-
-    if times:
-        logger.debug(f"Found prayer times for {city} in database for {date}")
-        return times
-
-    logger.info(f"No data found for {city}, {country} on {date}. Attempting to fetch...")
-    try:
-        ensure_future_data(city=city, country=country, days=7)
-        times = get_prayer_times_from_db(date, city)
-        if times:
-            logger.info(f"Successfully fetched prayer times for {city}, {country} on {date}")
-            return times
-        else:
-            logger.warning(f"Data not found after prefetch. Attempting direct API call...")
-            times = fetch_prayer_times_from_api(date, city, country)
-            return times
-    except PrayerAPIException as e:
-        logger.error(f"API error fetching prayer times for {city}, {country} on {date}: {e}")
-        raise Exception(f"Failed to fetch prayer times for {city}: {str(e)}")
-    except Exception as e:
-        logger.error(f"Unexpected error calculating prayer times: {e}", exc_info=True)
-        raise Exception(f"Failed to calculate prayer times: {str(e)}")
