@@ -130,13 +130,10 @@ class SettingsDialog(simpledialog.Dialog):
         # Tab 2: API Settings
         self.create_api_settings_tab(notebook)
         
-        # Tab 3: Display
+        # Tab 3: Display (includes font sizes)
         self.create_display_tab(notebook)
         
-        # Tab 4: Text Sizes (NEW)
-        self.create_text_sizes_tab(notebook)
-        
-        # Tab 5: Audio Settings
+        # Tab 4: Audio Settings
         self.create_audio_tab(notebook)
         
         # Tab 6: Notifications
@@ -224,23 +221,22 @@ class SettingsDialog(simpledialog.Dialog):
         self.school_combo.grid(row=1, column=1, padx=5, pady=5)
     
     def create_display_tab(self, notebook):
-        """Create Display tab."""
+        """Create Display tab with both display options and font size customization."""
         display_frame = ttk.Frame(notebook)
         notebook.add(display_frame, text="Display")
         
-        tk.Label(display_frame, text="Display Options:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        # Display Options section
+        tk.Label(display_frame, text="Display Options:", font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 15))
+        
         self.show_weather_var = tk.BooleanVar(value=self.current_show_weather)
         tk.Checkbutton(display_frame, text="Show weather (temperature & conditions)", 
                       variable=self.show_weather_var).grid(row=1, column=0, columnspan=2, 
                                                             sticky="w", padx=10, pady=5)
-    
-    def create_text_sizes_tab(self, notebook):
-        """Create Text Sizes tab for customizing individual font sizes."""
-        sizes_frame = ttk.Frame(notebook)
-        notebook.add(sizes_frame, text="Text Sizes")
         
-        tk.Label(sizes_frame, text="Customize Font Sizes:", font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=5, pady=(10, 15))
+        # Font Sizes section
+        tk.Label(display_frame, text="Customize Font Sizes:", font=("Segoe UI", 11, "bold")).grid(
+            row=2, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 15))
         
         # Create spinboxes for each font element
         self.font_size_spinboxes = {}
@@ -253,11 +249,11 @@ class SettingsDialog(simpledialog.Dialog):
             ("Weather Info", "weather", 8, 60)
         ]
         
-        row = 1
+        row = 3
         for label, key, min_val, max_val in elements:
-            tk.Label(sizes_frame, text=label + ":").grid(row=row, column=0, sticky="w", padx=10, pady=5)
+            tk.Label(display_frame, text=label + ":").grid(row=row, column=0, sticky="w", padx=10, pady=5)
             
-            spinbox_frame = tk.Frame(sizes_frame)
+            spinbox_frame = tk.Frame(display_frame)
             spinbox_frame.grid(row=row, column=1, sticky="ew", padx=10, pady=5)
             
             current_val = self.custom_font_sizes.get(key, 18)
@@ -272,19 +268,19 @@ class SettingsDialog(simpledialog.Dialog):
             
             row += 1
         
-        # Reset to preset button
-        tk.Label(sizes_frame, text="Presets:", font=("Segoe UI", 10, "bold")).grid(
+        # Preset buttons
+        tk.Label(display_frame, text="Presets:", font=("Segoe UI", 10, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
         
         row += 1
-        button_frame = tk.Frame(sizes_frame)
+        button_frame = tk.Frame(display_frame)
         button_frame.grid(row=row, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
         
         for preset_name in ["Small", "Medium", "Large"]:
             tk.Button(button_frame, text=preset_name, width=12,
                      command=lambda p=preset_name: self.apply_preset(p)).pack(side="left", padx=3)
         
-        sizes_frame.grid_columnconfigure(1, weight=1)
+        display_frame.grid_columnconfigure(1, weight=1)
     
     def apply_preset(self, preset_name):
         """Apply a preset font size configuration."""
@@ -326,12 +322,12 @@ class SettingsDialog(simpledialog.Dialog):
         tk.Label(audio_frame, text="Custom Audio Files:").grid(row=5, column=0, columnspan=2, sticky="w", padx=5, pady=(20, 10))
         tk.Label(audio_frame, text="Athan File:").grid(row=6, column=0, sticky="w", padx=5, pady=5)
         tk.Button(audio_frame, text="Browse...", command=self.select_athan_file, width=15).grid(row=6, column=1, sticky="w", padx=5, pady=5)
-        self.athan_file_display = tk.Label(audio_frame, text=os.path.basename(self.athan_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
+        self.athan_file_display = tk.Label(audio_frame, text=os.path.basename(self.athan_file), font=("Segoe UI", 8), fg="#000000", wraplength=300)
         self.athan_file_display.grid(row=6, column=1, sticky="e", padx=5, pady=5)
         
         tk.Label(audio_frame, text="Dua File:").grid(row=7, column=0, sticky="w", padx=5, pady=5)
         tk.Button(audio_frame, text="Browse...", command=self.select_dua_file, width=15).grid(row=7, column=1, sticky="w", padx=5, pady=5)
-        self.dua_file_display = tk.Label(audio_frame, text=os.path.basename(self.dua_file), font=("Segoe UI", 8), fg="#00FF99", wraplength=300)
+        self.dua_file_display = tk.Label(audio_frame, text=os.path.basename(self.dua_file), font=("Segoe UI", 8), fg="#000000", wraplength=300)
         self.dua_file_display.grid(row=7, column=1, sticky="e", padx=5, pady=5)
         
         audio_frame.grid_columnconfigure(1, weight=1)
@@ -489,7 +485,7 @@ class SettingsDialog(simpledialog.Dialog):
             stats_text += f"Data Range: {stats.get('earliest_date', 'N/A')} to {stats.get('latest_date', 'N/A')}\n"
             stats_text += f"Database Size: {stats.get('database_size_mb', 0)} MB"
             
-            stats_label = tk.Label(data_frame, text=stats_text, font=("Segoe UI", 9), fg="#00FF99", justify="left")
+            stats_label = tk.Label(data_frame, text=stats_text, font=("Segoe UI", 9), fg="#000000", justify="left")
             stats_label.grid(row=4, column=0, columnspan=2, sticky="nw", padx=10, pady=10)
         except Exception as e:
             tk.Label(data_frame, text=f"Error loading statistics: {str(e)}", font=("Segoe UI", 9), fg="#FF5555").grid(row=4, column=0, columnspan=2, sticky="w", padx=10, pady=10)
