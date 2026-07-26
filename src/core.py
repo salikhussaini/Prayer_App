@@ -683,14 +683,16 @@ def save_settings(settings):
 
 
 def load_settings():
-    """Load settings from JSON cache, return defaults if not found."""
+    """Load settings from JSON cache, return defaults if not found.
+    
+    Note: 'font_size' (preset name) is deprecated. Only 'custom_font_sizes' (dict) is used.
+    """
     # Define defaults
     defaults = {
         "country": DEFAULT_COUNTRY,
         "city": DEFAULT_CITY,
         "method": API_METHOD,
         "school": API_SCHOOL,
-        "font_size": DEFAULT_FONT_SIZE,
         "custom_font_sizes": FONT_SIZES.get(DEFAULT_FONT_SIZE, FONT_SIZES["Medium"]).copy(),
         "volume": 1.0,
         "athan_file": str(PROJECT_ROOT / "src/assets/athan.wav"),
@@ -714,6 +716,17 @@ def load_settings():
             with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
             logger.info(f"Settings loaded from {SETTINGS_FILE}")
+            
+            # Handle backward compatibility: if old 'font_size' exists but 'custom_font_sizes' is missing,
+            # use the preset sizes
+            if "font_size" in settings and "custom_font_sizes" not in settings:
+                preset_name = settings.get("font_size", DEFAULT_FONT_SIZE)
+                settings["custom_font_sizes"] = FONT_SIZES.get(preset_name, FONT_SIZES[DEFAULT_FONT_SIZE]).copy()
+                logger.info(f"Migrated deprecated 'font_size' preset '{preset_name}' to 'custom_font_sizes'")
+            
+            # Remove deprecated 'font_size' key before returning
+            settings.pop("font_size", None)
+            
             # Merge with defaults to ensure all keys are present
             return {**defaults, **settings}
     except json.JSONDecodeError:

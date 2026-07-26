@@ -68,7 +68,7 @@ class SettingsDialog(simpledialog.Dialog):
     """Unified settings dialog with tabs for Location, API, Display, Audio, and Notifications."""
     
     def __init__(self, parent, title, country_cities, current_country, current_city, 
-                 current_method, current_school, current_font_size=None, current_volume=1.0,
+                 current_method, current_school, current_volume=1.0,
                  current_window_state=None, current_start_minimized=False, current_alert_threshold=None,
                  current_prayer_alerts=None, current_athan_file=None, current_dua_file=None, current_show_weather=True,
                  current_custom_font_sizes=None, current_linux_max_volume=False, current_dialog_geometry=None,
@@ -80,7 +80,6 @@ class SettingsDialog(simpledialog.Dialog):
         
         self.current_method = current_method
         self.current_school = current_school
-        self.current_font_size = current_font_size or core.DEFAULT_FONT_SIZE
         self.current_volume = current_volume
         self.athan_file = current_athan_file or str(core.PROJECT_ROOT / "src/assets/athan.wav")
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
@@ -95,9 +94,9 @@ class SettingsDialog(simpledialog.Dialog):
         self.current_time_offset_hours = current_time_offset_hours
         self.current_time_offset_minutes = current_time_offset_minutes
         
-        # Initialize custom font sizes from preset or provided values
+        # Initialize custom font sizes from provided values or use default preset
         if current_custom_font_sizes is None:
-            self.custom_font_sizes = core.FONT_SIZES.get(self.current_font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE]).copy()
+            self.custom_font_sizes = core.FONT_SIZES.get(core.DEFAULT_FONT_SIZE, core.FONT_SIZES["Medium"]).copy()
         else:
             self.custom_font_sizes = current_custom_font_sizes.copy()
         
@@ -229,16 +228,10 @@ class SettingsDialog(simpledialog.Dialog):
         display_frame = ttk.Frame(notebook)
         notebook.add(display_frame, text="Display")
         
-        tk.Label(display_frame, text="Font Size:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.font_size_options = list(core.FONT_SIZES.keys())
-        self.font_size_combo = ttk.Combobox(display_frame, values=self.font_size_options, width=40, state="readonly")
-        self.font_size_combo.set(self.current_font_size)
-        self.font_size_combo.grid(row=0, column=1, padx=5, pady=5)
-        
-        tk.Label(display_frame, text="Display Options:").grid(row=1, column=0, sticky="w", padx=5, pady=(20, 10))
+        tk.Label(display_frame, text="Display Options:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
         self.show_weather_var = tk.BooleanVar(value=self.current_show_weather)
         tk.Checkbutton(display_frame, text="Show weather (temperature & conditions)", 
-                      variable=self.show_weather_var).grid(row=2, column=0, columnspan=2, 
+                      variable=self.show_weather_var).grid(row=1, column=0, columnspan=2, 
                                                             sticky="w", padx=10, pady=5)
     
     def create_text_sizes_tab(self, notebook):
@@ -441,9 +434,8 @@ class SettingsDialog(simpledialog.Dialog):
         
         method_name = self.method_combo.get()
         school_name = self.school_combo.get()
-        font_size = self.font_size_combo.get()
         
-        # Collect custom font sizes from spinboxes
+        # Collect custom font sizes from spinboxes (only custom sizes are saved, not preset name)
         custom_sizes = {}
         for key, spinbox_var in self.font_size_spinboxes.items():
             custom_sizes[key] = spinbox_var.get()
@@ -456,7 +448,6 @@ class SettingsDialog(simpledialog.Dialog):
             "city": city,
             "method": self.method_options[method_name],
             "school": self.school_options[school_name],
-            "font_size": font_size,
             "custom_font_sizes": custom_sizes,
             "volume": self.volume_var.get(),
             "athan_file": self.athan_file,
@@ -588,8 +579,9 @@ class SettingsDialog(simpledialog.Dialog):
         api_text = f"[API] {method_name} | {school_name}"
         tk.Label(about_frame, text=api_text, font=("Segoe UI", 9), fg=font_color).grid(row=4, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
-        # Display
-        display_text = f"[DISPLAY] {self.current_font_size} font size"
+        # Display (custom font sizes)
+        clock_size = self.custom_font_sizes.get("clock", 110)
+        display_text = f"[DISPLAY] Clock: {clock_size}pt (custom sizes)"
         tk.Label(about_frame, text=display_text, font=("Segoe UI", 9), fg=font_color).grid(row=5, column=0, columnspan=2, sticky="w", padx=20, pady=2)
         
         # Audio
@@ -731,11 +723,10 @@ class PrayerTimesFrame(tk.Frame):
     PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
     now = datetime.datetime.now()
     
-    def __init__(self, master=None, date=None, location=None, show_weather=True, font_size="Medium", weather_label=None, prayer_alerts=None, audio_volume=1.0):
+    def __init__(self, master=None, date=None, location=None, show_weather=True, weather_label=None, prayer_alerts=None, audio_volume=1.0):
         super().__init__(master, bg="#000000")
         self.date = date
         self.show_weather = show_weather
-        self.font_size = font_size
         self.weather_label = weather_label
         self.weather_data = None
         self.prayer_alerts = prayer_alerts or {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}
@@ -1182,8 +1173,8 @@ class MainWindow(tk.Tk):
 
         self.api_method = saved_settings["method"]
         self.api_school = saved_settings["school"]
-        self.font_size = saved_settings["font_size"]
-        self.custom_font_sizes = saved_settings.get("custom_font_sizes", core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"]))
+        self.custom_font_sizes = saved_settings.get("custom_font_sizes", core.FONT_SIZES.get(core.DEFAULT_FONT_SIZE, core.FONT_SIZES["Medium"]))
+        logger.info(f"🔤 Loaded custom font sizes from settings: {self.custom_font_sizes}")
         self.audio_volume = saved_settings["volume"]
         self.athan_file = saved_settings["athan_file"]
         self.fajr_athan_file = str(core.PROJECT_ROOT / "src/assets/fajr_athan.wav")
@@ -1249,7 +1240,7 @@ class MainWindow(tk.Tk):
         self.hijri_label.pack(fill="x", anchor="e")
         
         # Weather label in top-right corner
-        weather_font_size = core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"]).get("weather", 12)
+        weather_font_size = self.custom_font_sizes.get("weather", 12)
         self.weather_label = tk.Label(
             self.date_frame, text="Loading weather...", font=("Segoe UI", weather_font_size),
             bg="#000000", fg="#00FF99", pady=3
@@ -1260,7 +1251,6 @@ class MainWindow(tk.Tk):
             self, date=core.get_current_time_with_offset().date(),
             location={"city": self.city_var.get(), "country": self.country_var.get()},
             show_weather=saved_settings.get("show_weather", True),
-            font_size=self.font_size,
             weather_label=self.weather_label,
             prayer_alerts=saved_settings.get("prayer_alerts", {"Fajr": True, "Dhuhr": True, "Asr": True, "Maghrib": True, "Isha": True}),
             audio_volume=saved_settings.get("volume", 1.0)
@@ -1278,6 +1268,9 @@ class MainWindow(tk.Tk):
         self.update_analog_clock()
         self.update_clock()
         self.schedule_midnight_update()
+        
+        # Apply custom font sizes loaded from settings
+        self.apply_font_sizes()
 
     def configure_styles(self):
         """Configure ttk styles."""
@@ -1416,7 +1409,7 @@ class MainWindow(tk.Tk):
         dialog = SettingsDialog(self, "Settings", COUNTRY_CITIES,
                                self.country_var.get(), self.city_var.get(),
                                self.api_method, self.api_school, 
-                               self.font_size, self.audio_volume,
+                               self.audio_volume,
                                self.window_state, self.start_minimized,
                                self.alert_threshold, self.prayer_alerts,
                                self.athan_file, self.dua_file, self.show_weather,
@@ -1432,8 +1425,7 @@ class MainWindow(tk.Tk):
                 self.api_method = dialog.result["method"]
                 self.api_school = dialog.result["school"]
                 
-                # Update display
-                self.font_size = dialog.result["font_size"]
+                # Update display (only custom font sizes are used now)
                 self.custom_font_sizes = dialog.result.get("custom_font_sizes", self.custom_font_sizes)
                 
                 # Update audio
@@ -1483,7 +1475,7 @@ class MainWindow(tk.Tk):
                 
                 logger.info(f"Settings updated: Country={dialog.result['country']}, "
                           f"City={dialog.result['city']}, Method={self.api_method}, "
-                          f"School={self.api_school}, Font Size={self.font_size}, "
+                          f"School={self.api_school}, "
                           f"Volume={int(self.audio_volume * 100)}%, "
                           f"Alert Threshold={self.alert_threshold}s, "
                           f"Window State={self.window_state}, Start Minimized={self.start_minimized}")
@@ -1491,8 +1483,9 @@ class MainWindow(tk.Tk):
                 # Get current window geometry
                 window_geometry, current_state = self.save_window_state()
                 
-                # Get custom font sizes if using custom
-                custom_font_sizes = self.custom_font_sizes if hasattr(self, 'custom_font_sizes') else core.FONT_SIZES.get(self.font_size, core.FONT_SIZES["Medium"])
+                # Log custom font sizes before saving
+                custom_sizes_to_save = dialog.result.get("custom_font_sizes", self.custom_font_sizes)
+                logger.info(f"💾 Saving custom font sizes: {custom_sizes_to_save}")
                 
                 # Save settings to cache
                 core.save_settings({
@@ -1500,8 +1493,7 @@ class MainWindow(tk.Tk):
                     "city": dialog.result["city"],
                     "method": self.api_method,
                     "school": self.api_school,
-                    "font_size": self.font_size,
-                    "custom_font_sizes": custom_font_sizes,
+                    "custom_font_sizes": custom_sizes_to_save,
                     "volume": self.audio_volume,
                     "athan_file": self.athan_file,
                     "dua_file": self.dua_file,
@@ -1537,13 +1529,10 @@ class MainWindow(tk.Tk):
                 logger.error(f"Error applying settings: {e}", exc_info=True)
     
     def apply_font_sizes(self):
-        """Apply selected font size using custom sizes or preset."""
+        """Apply selected font sizes to all UI elements."""
         try:
-            # Use custom font sizes if available, otherwise fallback to preset
-            sizes = self.custom_font_sizes if self.custom_font_sizes else core.FONT_SIZES.get(self.font_size, core.FONT_SIZES[core.DEFAULT_FONT_SIZE])
-            
-            # Update prayer frame font size
-            self.prayer_frame.font_size = self.font_size
+            # Use custom font sizes; if empty, use default preset
+            sizes = self.custom_font_sizes if self.custom_font_sizes else core.FONT_SIZES.get(core.DEFAULT_FONT_SIZE)
             
             self.clock_label.config(font=("Segoe UI", sizes["clock"], "bold"))
             self.gregorian_label.config(font=("Segoe UI", sizes["date"]))
@@ -1564,7 +1553,7 @@ class MainWindow(tk.Tk):
                     prayer_name_label.config(font=("Segoe UI", sizes["prayer_name"], "bold"))
                     prayer_time_label.config(font=("Segoe UI", sizes["prayer_time"]))
             
-            logger.info(f"Font sizes applied: {self.font_size}")
+            logger.info(f"Font sizes applied: Clock={sizes.get('clock')}pt, Prayer Name={sizes.get('prayer_name')}pt")
         except Exception as e:
             logger.error(f"Error applying font sizes: {e}", exc_info=True)
 
